@@ -1,3 +1,4 @@
+import random
 import constants
 import random as r
 from html2image import Html2Image
@@ -5,6 +6,7 @@ import uuid
 import os
 import cv2
 import re
+from ImageProcessing import ImageProcessor
 
 TAG_REGEX = r"#tag_([A-Za-z]+)_[0-9]+#"
 
@@ -12,6 +14,7 @@ REGULAR = 'regular'
 TABLE = 'table'
 TABLE_LINES = 'table_lines'
 CELL = 'cell'
+
 
 class TableCreator:
 
@@ -25,7 +28,7 @@ class TableCreator:
                  border_radius_min_max=(0, 10), line_types=['solid', 'dashed'],
                  collapse_types=['collapse', 'separate'], table_text_alignment=['center', 'left', 'right'],
                  text_alignment=['center', 'left', 'right'], table_float_alignment=['left', 'right'],
-                 float_alignment=['left', 'right']):
+                 float_alignment=['left', 'right'], contains_handwriting: bool = False):
 
         self.html_template = html_template
         self.size = size
@@ -53,6 +56,9 @@ class TableCreator:
         self.head_line_margin_bottom = head_line_margin_bottom
         self.head_line_font_size = head_line_font_size
         self.head_line_text_alignment = head_line_text_alignment
+        self.contains_handwriting = contains_handwriting
+        if self.contains_handwriting:
+            self.image_processor = ImageProcessor(number_images=200, probability_signatures=0.5)
 
     def load_template(self):
         """generate image based on your template and parameters.
@@ -69,6 +75,7 @@ class TableCreator:
         html = self.set_background(html)
         tags = self.get_replaceable_tags(html)
 
+        # TODO: Add new types: images, handwriting, signature
         for tag in tags:
 
             if tag['type'] == 'random':
@@ -92,10 +99,11 @@ class TableCreator:
         matches = re.finditer(TAG_REGEX, html, re.MULTILINE)
 
         for matchNum, match in enumerate(matches, start=1):
+            # ToDo:  is this loop necessary?
             for group_num in range(0, len(match.groups())):
                 group_num = group_num + 1
-                match.group()
                 tags.append({'name': match.group(), 'type': match.group(group_num)})
+                # print(f'name: {match.group()}, type: {match.group(group_num)}')
 
         return tags
 
@@ -125,6 +133,12 @@ class TableCreator:
                       "border-style: solid !important; background: white !important}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style}')
 
+    # todo: get_handwritten_boxes
+
+    # todo: get_printed_boxes
+
+    # todo: get_signature_boxes
+
     def generate_images_from_html(self, html):
         """render the html string (chromium) and return a numpy array for each"""
 
@@ -133,17 +147,20 @@ class TableCreator:
         html_cell = self.get_cell_html(html)
         html_table = self.get_table_html(html)
         html_table_lines = self.get_table_lines_html(html)
+        # todo call get_printed,handwritten,signature_boxes
 
         hti.output_path = "temp_html"
         hti.screenshot(html_str=html, save_as=f'{prefix}_regular.png', size=self.size)
         hti.screenshot(html_str=html_table, save_as=f'{prefix}_table.png', size=self.size)
         hti.screenshot(html_str=html_table_lines, save_as=f'{prefix}_table_lines.png', size=self.size)
         hti.screenshot(html_str=html_cell, save_as=f'{prefix}_cell.png', size=self.size)
+        # todo: save screenshot of printed, handwritten, signature_boxes
 
         regular_img = cv2.imread(f'temp_html/{prefix}_regular.png')
         table_img = cv2.imread(f'temp_html/{prefix}_table.png')
         table_lines_img = cv2.imread(f'temp_html/{prefix}_table_lines.png')
         cell_img = cv2.imread(f'temp_html/{prefix}_cell.png')
+        # todo: call imread
 
         self.clean_up(prefix)
 
@@ -156,6 +173,7 @@ class TableCreator:
         os.remove(f'temp_html/{prefix}_table.png')
         os.remove(f'temp_html/{prefix}_table_lines.png')
         os.remove(f'temp_html/{prefix}_cell.png')
+        # todo: remove other temp files
 
     def replace_headline(self, tag: str, html: str):
         """generates a random <h1> headline and replaces the given tag in the html string before it is returned"""
@@ -170,6 +188,7 @@ class TableCreator:
         h1 = f'<h1 style="{color}{font_size}{font_weight}{align}{margin_top}{margin_bottom}{font}">{random_text}</h1>'
         return html.replace(tag, h1)
 
+    # todo: div elements with handwritten images?
     def generate_div_element(self, tag: str, html: str):
         """generates a random div element filled with text and replaces the
         given tag in the html string before it is returned"""
@@ -190,6 +209,19 @@ class TableCreator:
 
         return html.replace(tag, div)
 
+    def get_cell_text_and_style(self) -> str:
+        text = self.get_random_text(*self.table_text_length)
+        font = self.get_random_font_family()
+        color = self.get_random_color(*self.text_color_paras)
+        font_size = self.get_random_font_size(*self.table_font_size)
+        font_weight = self.get_random_font_weight()
+        align = self.get_random_text_align(self.table_text_alignment)
+
+        return f'{color}{font_size}{font_weight}{font}{align}">{text}'
+
+
+
+    # todo: table with handwriting and signatures
     def generate_table(self, tag: str, html: str):
         """generates a random table element and replaces the
         given tag in the html string before it is returned"""
@@ -203,6 +235,7 @@ class TableCreator:
         bottom = self.random_margin_bottom(2, 10)
         margin_right = self.random_margin_right(2, 10)
 
+
         table = f'<table style="{style}{width}{float_alignment}{margin}{margin_right}{bottom}{border_radius}">'
 
         column_count = r.randrange(*self.table_min_max_columns)
@@ -211,36 +244,42 @@ class TableCreator:
 
         for column in range(column_count):
             # create header <th> elements
-            text = self.get_random_text(*self.table_text_length)
-            font = self.get_random_font_family()
-            color = self.get_random_color(*self.text_color_paras)
-            font_size = self.get_random_font_size(*self.table_font_size)
-            font_weight = self.get_random_font_weight()
-            align = self.get_random_text_align(self.table_text_alignment)
+            table_cell_text = self.get_cell_text_and_style()
+
             border_style = self.border_style_table()
-            table += f'<th style="{border_style}{color}{font_size}{font_weight}{align}{font}">{text}</th>'
+            table += f'<th style      ="{border_style}{table_cell_text}</th>'
 
         table += "</tr>"
 
         for row in range(r.randrange(*self.table_min_max_rows)):
             # create row <tr> elements
             style = self.border_style_table()
+            color = self.get_random_color(*self.text_color_paras)
             table += f'<tr style="{style}">'
 
             for column in range(column_count):
                 # create <td> elements
                 divs = ""
-                for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
-                    # create <div> elements in each table cell for controlled multiline entries
-                    font = self.get_random_font_family()
-                    text = self.get_random_text(*self.table_text_length)
-                    color = self.get_random_color(*self.text_color_paras)
-                    font_size = self.get_random_font_size(*self.table_font_size)
-                    font_weight = self.get_random_font_weight()
-                    align = self.get_random_text_align(self.table_text_alignment)
-                    divs += f'<div style="{color}{font_size}{font_weight}{align}{font}">{text}</div>'
 
-                table += f'<td style="{style}{color}">{divs}</td>'
+                if self.contains_handwriting and random.uniform(0,1) > 0.33:
+                    for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
+                        # todo: add images
+                        next_image = self.image_processor.get_next_image()
+                        height = 25 if next_image["writing_type"] == "WritingType.HANDWRITING" else 50
+                        divs += f'<div > <img height= "{height}" width ="auto" src="{next_image["path"]}" ' \
+                                f'class="{next_image["writing_type"]} "alt="{next_image["name"]}"' \
+                                f' style="{next_image["transform"]}"> </div>'
+                    table += f'<td style="{style}{color};text-align:center">{divs}</td>'
+                else:
+                    for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
+                        # create <div> elements in each table cell for controlled multiline entries
+                        table_cell_text = self.get_cell_text_and_style()
+
+                        divs += f'<div style="{table_cell_text}</div>'
+                    table += f'<td style="{style}{color}">{divs}</td>'
+
+
+
             table += "</tr>"
         table += "</table>"
 
