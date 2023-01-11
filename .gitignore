@@ -3,3 +3,4 @@
 /temp_html/*
 /test/
 /data/*
+__pycache__/
