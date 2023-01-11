@@ -213,10 +213,10 @@ def store_images_for_masks(next_image: Dict) -> str:
 
 
 # Debugging: Transparency
-suffixes = ['.png', '.PNG']
-all_signature_images = [x for x in signatures_root_path.rglob('*') if x.suffix in suffixes]
-chosen_signature_files = random.choices(all_signature_images, k=200)
-signatures = [{'path': str(x), 'name': x.name, 'writing_type': str(WritingType.SIGNATURE)} for x in
-                  chosen_signature_files]
-signature = signatures[0]
-store_images_for_masks(signature)
+# suffixes = ['.png', '.PNG']
+# all_signature_images = [x for x in signatures_root_path.rglob('*') if x.suffix in suffixes]
+# chosen_signature_files = random.choices(all_signature_images, k=200)
+# signatures = [{'path': str(x), 'name': x.name, 'writing_type': str(WritingType.SIGNATURE)} for x in
+#                  chosen_signature_files]
+# signature = signatures[0]
+# store_images_for_masks(signature)
