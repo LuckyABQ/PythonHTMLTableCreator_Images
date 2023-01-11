@@ -1,9 +1,11 @@
 from PIL import Image
 import random
 from typing import List, Dict
+from collections import Counter
 from bs4 import BeautifulSoup
 from pathlib import Path
 import os
+import numpy as np
 
 from enum import Enum
 
@@ -22,9 +24,6 @@ signatures_root_path = \
 # todo: absolute path necessary for html
 temp_images_path = \
     Path(r'/home/lukas/PycharmProjects/HTMLGeneration/PythonHtmlTableCreator/data/temp_images/')
-
-
-
 
 
 class ImageProcessor:
@@ -113,30 +112,28 @@ class ImageProcessor:
 
 
 # todo: overlapping with table boarders
-def get_rand_transform(img_size: List[int] = [80, 25], box_size: List[float] = [160, 50] ) -> str:
-    transform = f"transform: translateX({get_rand_translate(img_size[0], box_size[0])}px) " \
-                f"translateY({get_rand_translate(img_size[1], box_size[1])}px)" \
-                f"rotate({get_rand_rotation()}deg)"
+def get_rand_transform() -> str:
+    transform = f"transform: translate({get_rand_translate()}) " \
+                f"rotate({get_rand_rotation()}deg)"\
+                f"{get_rand_scale()}"
     return transform
 
 
-def get_rand_translate(img_size: float, box_size: float) -> str:
+def get_rand_translate() -> str:
     # Translation: max one quarter of the image should overlap the table border
-    max_translate = (box_size - img_size) * 0.5 + img_size * 0.25
-    translate = random.uniform(-max_translate, max_translate)
-    return translate
-
+    translateX = random.uniform(-40, 40)
+    translateY = random.uniform(-30, 30)
+    return f"{translateX}%, {translateY}%"
 
 def get_rand_rotation() -> float:
     # rotation of max +-30deg
-    rotation = random.uniform(-25, 25)
+    rotation = random.uniform(-20, 20)
     return rotation
-
 
 def get_rand_scale() -> str:
     # Scaling of 0,9-1,1
     scale = 1 + (random.random() - 0.5) * 0.1
-    return f"scale({scale}deg)"
+    return f"scale({scale})"
 
 
 def calc_transparency(background_grey: int, darkest_grey: int, grey_value: int) -> int:
@@ -144,11 +141,10 @@ def calc_transparency(background_grey: int, darkest_grey: int, grey_value: int) 
     Calculates transparency value for a given grey_value
     """
 
-
-    linear_transparency = 255 - grey_value
-    quadratic_transparency = int(((255 - grey_value) / 255) ** 2 * 255)
-    cubic_transparency = int(((255 - grey_value) / 255) ** 3 * 255)
-    quartic_transparency = int(((255 - grey_value) / 255) ** 4 * 255)
+    linear_transparency = 255 - (grey_value - darkest_grey)
+    quadratic_transparency = int((linear_transparency / 255) ** 2 * 255)
+    cubic_transparency = int((linear_transparency / 255) ** 3 * 255)
+    quartic_transparency = int((linear_transparency / 255) ** 4 * 255)
 
     # grey_value is 0 if pixel is black
     # alpha_chanel is 0 if fully transparent
@@ -158,13 +154,11 @@ def calc_transparency(background_grey: int, darkest_grey: int, grey_value: int) 
         non_differentiable = 0
 
     else:
-        non_differentiable = 255
+        non_differentiable = linear_transparency
 
-   # grey_value < darkest_grey - 30:
+    # grey_value < darkest_grey - 30:
 
     return non_differentiable
-
-
 
 
 def store_images_for_masks(next_image: Dict) -> str:
@@ -188,35 +182,40 @@ def store_images_for_masks(next_image: Dict) -> str:
     transparent_data = []
     binary_data = []
 
-    background_grey = max(data_grey)
-    darkest_grey = min(data_grey)
+    set_data_grey = Counter(data_grey)
+    background_grey = set_data_grey.most_common(1)[0][0]
+    index_darkest_grey = np.argmin(data_grey)
     for item in zip(data_rgba, data_grey):
-        transparency = calc_transparency(background_grey, darkest_grey, item[1])
-        transparent_data.append((item[0][0], item[0][1], item[0][2], transparency))
+        transparency = calc_transparency(background_grey, data_grey[index_darkest_grey], item[1])
+        transparent_data.append((data_rgba[index_darkest_grey][0], data_rgba[index_darkest_grey][0],
+                                 data_rgba[index_darkest_grey][0], transparency))
         if transparency == 0:
-            binary_data.append((0, 0, 0, 0))
+            binary_data.append((255, 255, 255, 255))
         else:
+
             binary_data.append((0, 0, 0, 255))
 
     im.putdata(transparent_data)
 
     # save image without background
     output_path = temp_images_path / ("no_background_" + next_image['name'])
-    im.save(output_path, "PNG")
+    bbox = im.getbbox()
+    new_image = im.crop(bbox)
+    new_image.save(output_path, "PNG")
 
     # save image as binary
     im.putdata(binary_data)
+    new_image = im.crop(bbox)
     output_path_binary = temp_images_path / ("binary_" + next_image['name'])
-    im.save(output_path_binary, "PNG")
+    new_image.save(output_path_binary, "PNG")
 
     return output_path
 
 
 # Debugging: Transparency
-# suffixes = ['.png', '.PNG']
-# all_signature_images = [x for x in signatures_root_path.rglob('*') if x.suffix in suffixes]
-# chosen_signature_files = random.choices(all_signature_images, k=200)
-# signatures = [{'path': str(x), 'name': x.name, 'writing_type': str(WritingType.SIGNATURE)} for x in
-#                  chosen_signature_files]
-# signature = signatures[0]
-# store_images_for_masks(signature)
+"""suffixes = ['.png', '.PNG']
+all_signature_images = [x for x in signatures_root_path.rglob('*') if x.suffix in suffixes]
+chosen_signature_files = random.choices(all_signature_images, k=200)
+signatures = [{'path': str(x), 'name': x.name, 'writing_type': str(WritingType.SIGNATURE)} for x in
+              chosen_signature_files]
+store_images_for_masks(signatures[1])"""

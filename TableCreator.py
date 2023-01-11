@@ -266,7 +266,8 @@ class TableCreator:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
                         next_image = self.image_processor.get_next_image()
                         height = 25 if next_image["writing_type"] == "WritingType.HANDWRITING" else 60
-                        divs += f'<div> <img height= "{height}" width ="auto" src="{next_image["path"]}" ' \
+                        width = r'"auto"' if next_image["writing_type"] == "WritingType.HANDWRITING" else 180
+                        divs += f'<div> <img height={height} width={width} src="{next_image["path"]}" ' \
                                 f'class="{next_image["writing_type"]} "' \
                                 f'alt="{next_image["text"] if next_image["writing_type"] == "WritingType.HANDWRITING" else next_image["name"]}"' \
                                 f'style="{next_image["transform"]}; position: relative; z-index: -1;"  > </div>'
