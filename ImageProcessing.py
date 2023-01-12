@@ -1,3 +1,5 @@
+import re
+import glob2
 from PIL import Image
 import random
 from typing import List, Dict
@@ -80,12 +82,14 @@ class ImageProcessor:
             next_image = self.signature[self.counter_signatures]
             self.counter_signatures += 1
 
+            # make_white_area_transplant returns path for temporary file, with transparent background
+            next_image['path'] = store_images_for_masks(next_image['path'], next_image['name'])
+            next_image['transform'] = get_rand_transform()
+
         else:
+            content_counter = 0
+            while content_counter < 3:
 
-            # some images contain just one element - which is considered not long enough
-            is_long_enough = False
-
-            while not is_long_enough:
                 # get next image from handwriting list
                 next_image = self.handwriting[self.counter_handwriting]
                 self.counter_handwriting += 1
@@ -99,23 +103,39 @@ class ImageProcessor:
 
                 # find the word in xml file, and its text
                 soup = BeautifulSoup(data, "xml")
-                meta_data_word = soup.find(id=next_image['name'][:-4])
-                next_image['text'] = meta_data_word['text']
-                is_long_enough = len(next_image['text']) > 1
+                current_object = soup.find(id=next_image['name'][:-4])
+                next_image['path'] = []
+                next_image['text'] = []
+                next_image['name'] = []
 
-        next_image['transform'] = get_rand_transform()
+                content_counter = 0
 
-        # make_white_area_transplant returns path for temporary file, with transparent background
-        next_image['path'] = store_images_for_masks(next_image)
+                while content_counter < 3:
+                    if self.is_valid_handwriting(current_object['text']):
+                        next_image['text'].append(current_object['text'])
+                        next_image['path'].append(str(list(handwriting_root_path.rglob(f"*{current_object['id']}*"))[0]))
+                        next_image['name'].append(current_object['id'])
+                        content_counter += 1
+                    current_object = current_object.find_next('word')
+                    if current_object.__eq__(None):
+                        break
+
+            new_paths = [store_images_for_masks(path, name + ".png") for (path, name) in zip(next_image['path'], next_image['name'])]
+            next_image['path'] = new_paths
+            next_image['transform'] = get_rand_transform(scale=False)
+
+
 
         return next_image
 
+    def is_valid_handwriting(self, text: str) -> bool:
+        return len(text) > 1 and re.search('[a-zA-Z]', text)
+
 
 # todo: overlapping with table boarders
-def get_rand_transform() -> str:
+def get_rand_transform(scale: bool = True) -> str:
     transform = f"transform: translate({get_rand_translate()}) " \
-                f"rotate({get_rand_rotation()}deg)"\
-                f"{get_rand_scale()}"
+                f"rotate({get_rand_rotation()}deg) {get_rand_scale() if scale else ' ' } "
     return transform
 
 
@@ -131,8 +151,8 @@ def get_rand_rotation() -> float:
     return rotation
 
 def get_rand_scale() -> str:
-    # Scaling of 0,9-1,1
-    scale = 1 + (random.random() - 0.5) * 0.1
+    # Scaling of 1-2
+    scale = 1 + abs(random.uniform(-0.5, 0.5))
     return f"scale({scale})"
 
 
@@ -161,13 +181,13 @@ def calc_transparency(background_grey: int, darkest_grey: int, grey_value: int) 
     return non_differentiable
 
 
-def store_images_for_masks(next_image: Dict) -> str:
+def store_images_for_masks(path: str, name: str) -> str:
     """
      preprocessing of image: saves binary and semitransparent images in temp_images_path
      semi-transparent image: everything transparent except handwriting/signature
     :return: returns new path of semi-transparent image
     """
-    im = Image.open(next_image['path'])
+    im = Image.open(path)
     im = im.convert("RGBA")
     data_rgba = im.getdata()
 
@@ -190,7 +210,7 @@ def store_images_for_masks(next_image: Dict) -> str:
         transparent_data.append((data_rgba[index_darkest_grey][0], data_rgba[index_darkest_grey][0],
                                  data_rgba[index_darkest_grey][0], transparency))
         if transparency == 0:
-            binary_data.append((255, 255, 255, 255))
+            binary_data.append((255, 255, 255, 0))
         else:
 
             binary_data.append((0, 0, 0, 255))
@@ -198,7 +218,7 @@ def store_images_for_masks(next_image: Dict) -> str:
     im.putdata(transparent_data)
 
     # save image without background
-    output_path = temp_images_path / ("no_background_" + next_image['name'])
+    output_path = temp_images_path / ("no_background_" + name)
     bbox = im.getbbox()
     new_image = im.crop(bbox)
     new_image.save(output_path, "PNG")
@@ -206,7 +226,7 @@ def store_images_for_masks(next_image: Dict) -> str:
     # save image as binary
     im.putdata(binary_data)
     new_image = im.crop(bbox)
-    output_path_binary = temp_images_path / ("binary_" + next_image['name'])
+    output_path_binary = temp_images_path / ("binary_" + name)
     new_image.save(output_path_binary, "PNG")
 
     return output_path

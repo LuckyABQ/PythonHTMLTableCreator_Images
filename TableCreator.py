@@ -205,9 +205,10 @@ class TableCreator:
         font_size = self.get_random_font_size(*self.div_font_size)
         font_weight = self.get_random_font_weight()
         margin = self.random_margin_top(*self.div_top_margin)
-        text = self.get_random_text(*self.text_min_max_length)
         align = self.get_random_text_align(self.text_alignment)
         float_alignment = self.float_align(self.float_alignment)
+        text = self.get_random_text(*self.text_min_max_length)
+
 
         # create styled div
         div = f'<div class="print" style="{color}{align}{width}{float_alignment}{font_size}{font_weight}{margin}{font}">{text}</div>'
@@ -265,12 +266,19 @@ class TableCreator:
                 if self.contains_handwriting and random.uniform(0,1) > 0.33:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
                         next_image = self.image_processor.get_next_image()
-                        height = 25 if next_image["writing_type"] == "WritingType.HANDWRITING" else 60
-                        width = r'"auto"' if next_image["writing_type"] == "WritingType.HANDWRITING" else 180
-                        divs += f'<div> <img height={height} width={width} src="{next_image["path"]}" ' \
-                                f'class="{next_image["writing_type"]} "' \
-                                f'alt="{next_image["text"] if next_image["writing_type"] == "WritingType.HANDWRITING" else next_image["name"]}"' \
-                                f'style="{next_image["transform"]}; position: relative; z-index: -1;"  > </div>'
+                        divs += f'<div style="{next_image["transform"]}; position: relative; z-index: -1;" > '
+
+                        if next_image["writing_type"] == "WritingType.HANDWRITING":
+                            for (path, text) in zip(next_image['path'], next_image['text']):
+                                divs += f'<img height=25 width="auto" src="{path}" ' \
+                                        f'class="{next_image["writing_type"]} "' \
+                                        f'alt="{text}"> '
+                        else:
+                            divs += f'<img height=60 width=180 src="{next_image["path"]}" ' \
+                                    f'class="{next_image["writing_type"]} "' \
+                                    f'alt="{next_image["name"]}">'
+
+                        divs += f' </div>'
                     table += f'<td style="{style}{color};text-align:center; position: relative">{divs}</td>'
                 else:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
@@ -314,6 +322,7 @@ class TableCreator:
         end = r.randrange(start + min, start + max)
 
         return constants.lorem[start:end]
+
 
     def get_random_font_size(self, min: int, max: int):
         """gets a random font size between your min and max,
