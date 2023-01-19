@@ -14,6 +14,8 @@ REGULAR = 'regular'
 TABLE = 'table'
 TABLE_LINES = 'table_lines'
 CELL = 'cell'
+HANDWRITING = 'handwriting'
+SIGNATURES = 'signatures'
 
 
 class TableCreator:
@@ -60,7 +62,6 @@ class TableCreator:
         if self.contains_handwriting:
             self.image_processor = ImageProcessor()
 
-    #todo images for handwriting and signatures
     def load_template(self):
         """generate image based on your template and parameters.
         returns the images in a json object:
@@ -122,7 +123,8 @@ class TableCreator:
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important; border-color: white !important; " \
                       "border-style: solid !important}"
-        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style}')
+        img_style = "img{opacity: 0.0}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style}')
 
     def get_table_html(self, html):
         """turns everything black but the table as a block white"""
@@ -131,6 +133,25 @@ class TableCreator:
         table_style = "table, tr, th, td {color: transparent !important; border-color: white !important; " \
                       "border-style: solid !important; background: white !important}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style}')
+
+    def get_handwritten_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
+        body_style = "body {color: transparent !important; background: black !important}"
+        table_style = "table, tr, th, td {color: transparent !important;" \
+                      "border-color: black !important;border-style: solid !important}"
+        signature_style = ".SIGNATURE {opacity: 0.0;}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style}')
+
+    def get_signatures_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
+        body_style = "body {color: transparent !important; background: black !important}"
+        table_style = "table, tr, th, td {color: transparent !important;" \
+                      "border-color: black !important;border-style: solid !important}"
+        signature_style = ".HANDWRITING {opacity: 0.0;}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style}')
+
 
     # todo: get_handwritten_boxes
 
@@ -149,13 +170,19 @@ class TableCreator:
         html_table = self.get_table_html(html)
         html_table_lines = self.get_table_lines_html(html)
 
-        # todo call get_printed,handwritten,signature_boxes and binary
+        html_image_binaries = self.image_processor.replace_image_with_binaries(html)
+
+        html_handwritten = self.get_handwritten_html(html_image_binaries)
+        html_signatures = self.get_signatures_html(html_image_binaries)
+
 
         hti.output_path = "temp_html"
         hti.screenshot(html_str=html, save_as=f'{prefix}_regular.png', size=self.size)
         hti.screenshot(html_str=html_table, save_as=f'{prefix}_table.png', size=self.size)
         hti.screenshot(html_str=html_table_lines, save_as=f'{prefix}_table_lines.png', size=self.size)
         hti.screenshot(html_str=html_cell, save_as=f'{prefix}_cell.png', size=self.size)
+        hti.screenshot(html_str=html_handwritten, save_as=f'{prefix}_handwritten.png', size=self.size)
+        hti.screenshot(html_str=html_signatures, save_as=f'{prefix}_signatures.png', size=self.size)
         # todo: save screenshot of printed,handwritten,signature_boxes
 
         with open("temp_html/temp_html_regular.html", "w") as text_file:
@@ -165,11 +192,14 @@ class TableCreator:
         table_img = cv2.imread(f'temp_html/{prefix}_table.png')
         table_lines_img = cv2.imread(f'temp_html/{prefix}_table_lines.png')
         cell_img = cv2.imread(f'temp_html/{prefix}_cell.png')
+        handwritten_img = cv2.imread(f'temp_html/{prefix}_handwritten.png')
+        signature_img = cv2.imread(f'temp_html/{prefix}_signatures.png')
         # todo: call imread
 
         self.clean_up(prefix)
 
-        return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES: table_lines_img, CELL: cell_img}, prefix
+        return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES: table_lines_img,
+                CELL: cell_img, HANDWRITING: handwritten_img, SIGNATURES: signature_img}, prefix
 
     def clean_up(self, prefix):
         """delete temp. created images from filesystem"""
@@ -266,18 +296,18 @@ class TableCreator:
                 if self.contains_handwriting and random.uniform(0,1) > 0.33:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
                         next_image = self.image_processor.get_next_image()
-                        divs += f'<div style="{next_image["transform"]}; position: relative; z-index: -1;" > '
+                        divs += f'<div style="{next_image["transform"]}; width: fit-content; height: fit-content;' \
+                                f' position: relative; z-index: -1;" > '
 
-                        if next_image["writing_type"] == "WritingType.HANDWRITING":
+                        if next_image["writing_type"] == "HANDWRITING":
                             for (path, text) in zip(next_image['path'], next_image['text']):
                                 divs += f'<img height=25 width="auto" src="{path}" ' \
-                                        f'class="{next_image["writing_type"]} "' \
+                                        f'class="{str(next_image["writing_type"])}" ' \
                                         f'alt="{text}"> '
                         else:
                             divs += f'<img height=60 width=180 src="{next_image["path"]}" ' \
-                                    f'class="{next_image["writing_type"]} "' \
+                                    f'class="{str(next_image["writing_type"])}" ' \
                                     f'alt="{next_image["name"]}">'
-
                         divs += f' </div>'
                     table += f'<td style="{style}{color};text-align:center; position: relative">{divs}</td>'
                 else:
