@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
+import imutils
 import random
+import matplotlib.pyplot as plt
+import json
+import math
 
 
 def get_table_annotations(table_mask):
@@ -28,6 +32,177 @@ def get_table_annotations(table_mask):
 
     return table_mask, boxes
 
+
+def get_signature_annotations(image_boxes, list_signatures, overlay_image=None):
+    image_boxes_grey = cv2.cvtColor(image_boxes, cv2.COLOR_BGR2GRAY)
+    boxes = []
+
+    color_thresh = cv2.threshold(image_boxes_grey, 1, 255, cv2.THRESH_BINARY)[1]
+    contours = cv2.findContours(color_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = contours[0] if len(contours) == 2 else contours[1]
+
+    thickness = 1
+    for cntr in contours:
+
+        M = cv2.moments(cntr)
+        if M["m00"] != 0:
+
+            # calc center of contour
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+
+            # determine its color in rgb
+            color = list(np.array(image_boxes[cY, cX]))
+            color.reverse()
+
+            # all signatures with this color
+            all_candidates = list(filter(lambda item: item["color"] == color, list_signatures))
+
+            if len(all_candidates) == 1:
+
+                current_image = all_candidates[0]
+                transform = current_image['transform']
+                [w_image, h_image] = current_image['shape']
+                bot_left, top_right = calc_bb_rotated_rectangle([cX, cY], transform, [h_image, w_image])
+
+                if overlay_image is not None:
+                    overlay_image = cv2.rectangle(overlay_image, bot_left, top_right, (0, 255, 0), thickness)
+
+                box_data = {'xStart': bot_left[0], 'yStart': bot_left[1], 'xEnd': top_right[0], 'yEnd': top_right[1]}
+                boxes.append(box_data)
+
+            else:
+                print(f"Error: len(all_candidates) != 1, but was {len(all_candidates)}")
+        else:
+            print("Error: M['m00']==0")
+
+    return boxes
+
+
+def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=None):
+    image_boxes_grey = cv2.cvtColor(image_boxes, cv2.COLOR_BGR2GRAY)
+    boxes = []
+
+    color_thresh = cv2.threshold(image_boxes_grey, 1, 255, cv2.THRESH_BINARY)[1]
+    contours = cv2.findContours(color_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = contours[0] if len(contours) == 2 else contours[1]
+
+    thickness = 1
+
+    for cntr in contours:
+        M = cv2.moments(cntr)
+        if M["m00"] != 0:
+            # calc center of contour
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            # determine its color in rgb
+            color = list(np.array(image_boxes[cY, cX]))
+            color.reverse()
+
+            # all signatures with this color
+            all_candidates = list(filter(lambda item: color in item["color"], list_handwriting))
+
+            if len(all_candidates) == 1:
+                handwriting_group = all_candidates[0]
+                list_handwriting.remove(handwriting_group)
+                new_color_box = {'contour': cntr, 'color': color, 'center': [cX, cY]}
+                if 'color_box' in handwriting_group:
+                    handwriting_group['color_box'].append(new_color_box)
+                else:
+                    handwriting_group['color_box'] = [new_color_box]
+                list_handwriting.append(handwriting_group)
+            else:
+                print(f"Error: len(all_candidates) != 1, but was {len(all_candidates)}")
+        else:
+            print("Error: M['m00']==0")
+
+    # for each handwriting_group one bounding_box
+    for handwriting_group in list_handwriting:
+        if 'color_box' in handwriting_group:
+            bb_edges_x = []
+            bb_edges_y = []
+            for color_box in handwriting_group['color_box']:
+                index = handwriting_group['color'].index(color_box['color'])
+                [inner_w, inner_h] = handwriting_group['shape'][index]
+                bot_left, top_right = calc_bb_rotated_rectangle(color_box['center'],
+                                                                handwriting_group['transform'], [inner_h, inner_w])
+
+                if overlay_image is not None:
+                    overlay_image = cv2.rectangle(overlay_image, bot_left, top_right, (255, 255, 0),
+                                                  thickness)
+                bb_edges_x.extend([bot_left[0], top_right[0]])
+                bb_edges_y.extend([bot_left[1], top_right[1]])
+
+            total_bot_left, total_top_right = calc_bb_handwriting_group(bb_edges_x, bb_edges_y)
+
+            box_data = {'xStart': total_bot_left[0], 'yStart': total_bot_left[1],
+                        'xEnd': total_top_right[0], 'yEnd': total_top_right[1]}
+            boxes.append(box_data)
+            if overlay_image is not None:
+                overlay_image = cv2.rectangle(overlay_image, total_bot_left, total_top_right, (0, 255, 0), thickness)
+        else:
+            print("this group does not have color_box: ", handwriting_group['text'])
+
+    return boxes
+
+
+def calc_bb_handwriting_group(bb_edges_x, bb_edges_y):
+    min_x, max_x = min(bb_edges_x), max(bb_edges_x)
+    min_y, max_y = min(bb_edges_y), max(bb_edges_y)
+
+    return (int(min_x), int(min_y)), (math.ceil(max_x), math.ceil(max_y))
+
+
+def calc_bb_rotated_rectangle(center, transform, size):
+    angle = (transform['rotation'] / 360) * 2 * math.pi
+    height = size[0] * transform['scale']
+    width = size[1] * transform['scale']
+    center_x = center[0]
+    center_y = center[1]
+
+    # top_right
+    top_right_x = center_x + ((width / 2) * math.cos(angle)) - ((height / 2) * math.sin(angle))
+    top_right_y = center_y + ((width / 2) * math.sin(angle)) + ((height / 2) * math.cos(angle))
+
+    # top_left
+    top_left_x = center_x - ((width / 2) * math.cos(angle)) - ((height / 2) * math.sin(angle))
+    top_left_y = center_y - ((width / 2) * math.sin(angle)) + ((height / 2) * math.cos(angle))
+
+    # bottom_left:
+    bot_left_x = center_x - ((width / 2) * math.cos(angle)) + ((height / 2) * math.sin(angle))
+    bot_left_y = center_y - ((width / 2) * math.sin(angle)) - ((height / 2) * math.cos(angle))
+
+    # bottom_right:
+    bot_right_x = center_x + ((width / 2) * math.cos(angle)) + ((height / 2) * math.sin(angle))
+    bot_right_y = center_y + ((width / 2) * math.sin(angle)) - ((height / 2) * math.cos(angle))
+
+    # calc min and max for surrounding rectangle
+    x_values = [top_right_x, top_left_x, bot_left_x, bot_right_x]
+    y_values = [top_right_y, top_left_y, bot_left_y, bot_right_y]
+    min_x, max_x = min(x_values), max(x_values)
+    min_y, max_y = min(y_values), max(y_values)
+
+    return (int(min_x), int(min_y)), (math.ceil(max_x), math.ceil(max_y))
+
+
+def get_print_annotations(image_boxes, image_to_overlay=None):
+    grey_image_boxes = cv2.cvtColor(image_boxes, cv2.COLOR_BGR2GRAY)
+    contours, hierarchy = cv2.findContours(grey_image_boxes, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[-2:]
+
+    boxes=[]
+
+    for cnt in reversed(contours):
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        box_data = {'xStart': x, 'yStart': y, 'xEnd': x + w, 'yEnd': y + h}
+
+        boxes.append(box_data)
+
+        if image_to_overlay is not None:
+            # generate an overlay to check that the annotations line up with the real table, this is for debugging
+            cv2.rectangle(image_to_overlay, (x, y), (x + w, y + h), (255, 0, 0), 1)
+
+    return boxes
 
 def get_cell_annotations(table_boxes, original_cell_mask, table_line_mask=None, image_to_overlay=None):
     """calculates the boxes for the cells based on the boxes for the table and returns it as a numpy array and a list.

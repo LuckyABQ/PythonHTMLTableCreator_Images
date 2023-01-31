@@ -11,6 +11,9 @@ def write(images, overlay_image, boxes, prefix, folder='generate'):
     cv2.imwrite(f'{folder}/mask_cell/{prefix}.png', images[TableCreator.CELL])
     cv2.imwrite(f'{folder}/mask_table/{prefix}.png', images[TableCreator.TABLE])
     cv2.imwrite(f'{folder}/mask_table_line/{prefix}.png', images[TableCreator.TABLE_LINES])
+    cv2.imwrite(f'{folder}/mask_handwriting/{prefix}.png', images[TableCreator.HANDWRITING])
+    cv2.imwrite(f'{folder}/mask_print/{prefix}.png', images[TableCreator.PRINT])
+    cv2.imwrite(f'{folder}/mask_signature/{prefix}.png', images[TableCreator.SIGNATURES])
     cv2.imwrite(f'{folder}/overlay/{prefix}.jpg', overlay_image)
 
     with open(f'{folder}/box/{prefix}.json', 'w', encoding='utf-8') as f:
@@ -36,6 +39,9 @@ def make_folders(folder):
     create_if_not_exists(f'{folder}/mask_cell')
     create_if_not_exists(f'{folder}/mask_table')
     create_if_not_exists(f'{folder}/mask_table_line')
+    create_if_not_exists(f'{folder}/mask_handwriting')
+    create_if_not_exists(f'{folder}/mask_print')
+    create_if_not_exists(f'{folder}/mask_signature')
     create_if_not_exists(f'{folder}/overlay')
 
 

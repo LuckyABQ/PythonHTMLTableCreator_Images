@@ -15,17 +15,21 @@ TABLE = 'table'
 TABLE_LINES = 'table_lines'
 CELL = 'cell'
 HANDWRITING = 'handwriting'
+HANDWRITING_BOXES = 'handwriting_boxes'
 SIGNATURES = 'signatures'
+SIGNATURES_BOXES = 'signatures_boxes'
+PRINT = 'print'
+PRINT_BOXES = 'print_boxes'
 
 
 class TableCreator:
 
-    def __init__(self, html_template='templates/index.html', size=(1500, 2200), min_max_div=(1000, 1200),
+    def __init__(self, html_template='templates/index.html', size=(2200, 1500), min_max_div=(1000, 1200),
                  table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(1, 4), table_font_size=(16, 25),
-                 text_color_paras=(0, 50, 0.7, 1.0), table_min_max_columns=(2, 7), table_text_length=(10, 20),
-                 table_min_max_rows=(2, 7), table_min_max_lines_in_row=(1, 2), div_font_size=(20, 30),
-                 text_min_max_length=(200, 2000), div_top_margin=(5, 100),
-                 head_line_text_length=(50, 150), head_line_margin_top=(5, 10), head_line_margin_bottom=(5, 30),
+                 text_color_paras=(0, 50, 0.7, 1.0), table_min_max_columns=(4, 7), table_text_length=(10, 20),
+                 table_min_max_rows=(4, 9), table_min_max_lines_in_row=(1, 2), div_font_size=(20, 30),
+                 text_min_max_length=(200, 1000), div_top_margin=(20, 100),
+                 head_line_text_length=(25, 75), head_line_margin_top=(5, 10), head_line_margin_bottom=(5, 30),
                  head_line_font_size=(25, 55), head_line_text_alignment=['center', 'left', 'right'],
                  border_radius_min_max=(0, 10), line_types=['solid'],
                  collapse_types=['collapse'], table_text_alignment=['center', 'left', 'right'],
@@ -59,10 +63,8 @@ class TableCreator:
         self.head_line_font_size = head_line_font_size
         self.head_line_text_alignment = head_line_text_alignment
         self.contains_handwriting = contains_handwriting
-        if self.contains_handwriting:
-            self.image_processor = ImageProcessor()
 
-    def load_template(self):
+    def load_template(self, image_processor: ImageProcessor):
         """generate image based on your template and parameters.
         returns the images in a json object:
         {'regular': regular_img, 'table': table_img, 'table_lines': table_lines_img, 'cell': cell_img}
@@ -71,6 +73,7 @@ class TableCreator:
         table_lines = everything is black (0,0,0) but the table lines are white (255,255,255)
         cell = everything is black (0,0,0) but the table cells are white (255,255,255)
         """
+
         with open(self.html_template, 'r') as file:
             html = file.read().replace('\n', '')
 
@@ -80,13 +83,13 @@ class TableCreator:
         for tag in tags:
 
             if tag['type'] == 'random':
-                types = ['table', 'text', 'headline']
+                types = ['table', 'text']
                 tag['type'] = types[r.randrange(0, len(types))]
 
             if tag['type'] == 'table':
-                html = self.generate_table(tag['name'], html)
+                html = self.generate_table(tag['name'], html, image_processor)
             elif tag['type'] == 'text':
-                html = self.generate_div_element(tag['name'], html)
+                html = self.generate_div_element(tag['name'], html, image_processor)
             elif tag['type'] == 'headline':
                 html = self.replace_headline(tag['name'], html)
 
@@ -132,37 +135,72 @@ class TableCreator:
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important; border-color: white !important; " \
                       "border-style: solid !important; background: white !important}"
-        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style}')
+        img_style = "img{opacity: 0.0}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style}{img_style}')
+
+    def get_handwritten_boxes_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
+        body_style = "body {color: transparent !important; background: black !important}"
+        table_style = "table, tr, th, td {color: transparent !important;" \
+                      "border-color: transparent !important;border-style: solid !important}"
+        writing_style = ".SIGNATURE {opacity: 0.0; } "
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {writing_style} ')
 
     def get_handwritten_html(self, html):
         """turns everything black but the handwritten images"""
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: black !important;border-style: solid !important}"
+                      "border-color: transparent !important;border-style: solid !important}"
         signature_style = ".SIGNATURE {opacity: 0.0;}"
-        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style}')
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style} ')
+
+
+    def get_signatures_boxes_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
+        body_style = "body {color: transparent !important; background: black !important}"
+        table_style = "table, tr, th, td {color: transparent !important;" \
+                      "border-color: transparent !important;border-style: solid !important}"
+        writing_style = ".HANDWRITING {opacity: 0.0;}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {writing_style}')
 
     def get_signatures_html(self, html):
         """turns everything black but the handwritten images"""
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: black !important;border-style: solid !important}"
-        signature_style = ".HANDWRITING {opacity: 0.0;}"
-        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style}')
+                      "border-color: transparent !important;border-style: solid !important}"
+        handwriting_style = ".HANDWRITING {opacity: 0.0; z-index: 2 !important;}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {handwriting_style}')
+
+    def get_printed_boxes_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "span, div  {color: transparent !important;}"
+        body_style = "body {color: transparent !important; background: black !important}"
+        table_style = "table, tr, th, td {color: transparent !important;" \
+                      "border-color: transparent !important;border-style: solid !important}"
+        img_style = "img{opacity: 0.0}"
+        print_box_style = ".print {background-color: white; border:1px solid black; display: inline-block !important}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style}{print_box_style}')
+
+    def get_printed_html(self, html):
+        """turns everything black but the handwritten images"""
+        div_style = "h1, h2, h3, h4, h5, span, div {color: rgba(255,255,255,255) !important;}"
+        body_style = "body {color: rgba(255,255,255,255) !important; background: black !important}"
+        table_style = "table, tr, th, td {color: rgba(255,255,255,255) !important;" \
+                      "border-color: rgba(0,0,0,0) !important;border-style: solid !important}"
+        img_style = "img{opacity: 0.0}"
+        print_style = ".print {color: rgba(255, 255, 255, 255), !important;}"
+        return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style} {print_style}')
 
 
-    # todo: get_handwritten_boxes
-
-    # todo: get_printed_boxes
-
-    # todo: get_signature_boxes
-
-    #todo: get_signatures_binary, printed_binary, handwritten_binary
 
     def generate_images_from_html(self, html):
         """render the html string (chromium) and return a numpy array for each"""
+
+        html = ImageProcessor.normalize_with_beautifulsoup(html)
 
         hti = Html2Image()
         prefix = uuid.uuid4()
@@ -170,11 +208,28 @@ class TableCreator:
         html_table = self.get_table_html(html)
         html_table_lines = self.get_table_lines_html(html)
 
-        html_image_binaries = self.image_processor.replace_image_with_binaries(html)
+        html_print = self.get_printed_html(html)
+        html_print_boxes = self.get_printed_boxes_html(html)
 
+        html_image_binaries = ImageProcessor.replace_image_with_binaries(html)
         html_handwritten = self.get_handwritten_html(html_image_binaries)
         html_signatures = self.get_signatures_html(html_image_binaries)
 
+        html_image_boxes = ImageProcessor.replace_image_with_boxes(html)
+        html_handwritten_boxes = self.get_handwritten_boxes_html(html_image_boxes)
+        html_signatures_boxes = self.get_signatures_boxes_html(html_image_boxes)
+
+        with open("temp_html/temp_html_print.html", "w") as text_file:
+            text_file.write(html_print)
+
+        with open("temp_html/temp_html_print_boxes.html", "w") as text_file:
+            text_file.write(html_print_boxes)
+
+        with open("temp_html/temp_html_color_boxes.html", "w") as text_file:
+            text_file.write(html_image_boxes)
+
+        with open("temp_html/temp_html_mask_table.html", "w") as text_file:
+            text_file.write(html_table)
 
         hti.output_path = "temp_html"
         hti.screenshot(html_str=html, save_as=f'{prefix}_regular.png', size=self.size)
@@ -183,7 +238,11 @@ class TableCreator:
         hti.screenshot(html_str=html_cell, save_as=f'{prefix}_cell.png', size=self.size)
         hti.screenshot(html_str=html_handwritten, save_as=f'{prefix}_handwritten.png', size=self.size)
         hti.screenshot(html_str=html_signatures, save_as=f'{prefix}_signatures.png', size=self.size)
-        # todo: save screenshot of printed,handwritten,signature_boxes
+        hti.screenshot(html_str=html_handwritten_boxes, save_as=f'{prefix}_handwritten_boxes.png', size=self.size)
+        hti.screenshot(html_str=html_signatures_boxes, save_as=f'{prefix}_signatures_boxes.png', size=self.size)
+
+        hti.screenshot(html_str=html_print, save_as=f'{prefix}_print.png', size=self.size)
+        hti.screenshot(html_str=html_print_boxes, save_as=f'{prefix}_print_boxes.png', size=self.size)
 
         with open("temp_html/temp_html_regular.html", "w") as text_file:
             text_file.write(html)
@@ -194,12 +253,18 @@ class TableCreator:
         cell_img = cv2.imread(f'temp_html/{prefix}_cell.png')
         handwritten_img = cv2.imread(f'temp_html/{prefix}_handwritten.png')
         signature_img = cv2.imread(f'temp_html/{prefix}_signatures.png')
-        # todo: call imread
+        handwritten_boxes_img = cv2.imread(f'temp_html/{prefix}_handwritten_boxes.png')
+        signatures_boxes_img = cv2.imread(f'temp_html/{prefix}_signatures_boxes.png')
+        print_img = cv2.imread(f'temp_html/{prefix}_print.png')
+        print_boxes_img = cv2.imread(f'temp_html/{prefix}_print_boxes.png')
 
         self.clean_up(prefix)
 
         return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES: table_lines_img,
-                CELL: cell_img, HANDWRITING: handwritten_img, SIGNATURES: signature_img}, prefix
+                CELL: cell_img, HANDWRITING: handwritten_img, SIGNATURES: signature_img,
+                HANDWRITING_BOXES: handwritten_boxes_img, SIGNATURES_BOXES: signatures_boxes_img,
+                PRINT_BOXES: print_boxes_img, PRINT: print_img}, \
+            prefix
 
     def clean_up(self, prefix):
         """delete temp. created images from filesystem"""
@@ -208,6 +273,10 @@ class TableCreator:
         os.remove(f'temp_html/{prefix}_table.png')
         os.remove(f'temp_html/{prefix}_table_lines.png')
         os.remove(f'temp_html/{prefix}_cell.png')
+        os.remove(f'temp_html/{prefix}_print_boxes.png')
+        os.remove(f'temp_html/{prefix}_print.png')
+        os.remove(f'temp_html/{prefix}_signatures_boxes.png')
+        os.remove(f'temp_html/{prefix}_signatures.png')
         # todo: remove other temp files
 
     def replace_headline(self, tag: str, html: str):
@@ -220,11 +289,53 @@ class TableCreator:
         margin_top = self.random_margin_top(*self.head_line_margin_top)
         margin_bottom = self.random_margin_top(*self.head_line_margin_bottom)
         color = self.get_random_color(*self.text_color_paras)
-        h1 = f'<h1 style="{color}{font_size}{font_weight}{align}{margin_top}{margin_bottom}{font}">{random_text}</h1>'
+        h1 = f'<h1 style="{color}{font_size}{font_weight}{align}{margin_top}{margin_bottom}{font}">' \
+             f' <div class="print" style= "display: inline-block">{random_text} </div>' \
+             f'</h1>'
         return html.replace(tag, h1)
 
     # todo: div elements with handwritten images?
-    def generate_div_element(self, tag: str, html: str):
+    def generate_div_element(self, tag: str, html: str, image_processor: ImageProcessor):
+        if self.contains_handwriting and random.uniform(0, 1) > 0.5:
+            div = self.generate_mixed_div_element(image_processor = image_processor)
+        else:
+            div = self.generate_long_print_div_element()
+
+        return html.replace(tag, div)
+
+    def generate_mixed_div_element(self, image_processor: ImageProcessor):
+
+        width = f'width: {r.randrange(*self.min_max_div)}px;'
+        color = self.get_random_color(*self.text_color_paras)
+        font = self.get_random_font_family()
+        font_weight = self.get_random_font_weight()
+        margin = self.random_margin_top(*self.div_top_margin)
+        align = self.get_random_text_align(self.text_alignment)
+        float_alignment = self.float_align(self.float_alignment)
+
+        #font size manual, to adjust hight of handwritings:
+        font_size = r.randrange(*self.div_font_size)
+        font_size_text = f'font-size: {font_size}px;'
+        # style and begin of paragraph
+        div = f'<div style="{color}{align}{width}{float_alignment}{font_size_text}{font_weight}{margin}{font}">'
+
+        lines = r.randrange(*self.table_min_max_rows)
+        content = r.randrange(*self.table_min_max_columns)
+        current_block_print = False
+        for i in range(0, lines * content):
+            if current_block_print or random.uniform(0, 1) > 0.33:
+                div += self.get_random_written(max_height=font_size, image_processor = image_processor, is_in_table=False)
+                current_block_print = False
+            else:
+                div += self.generate_short_printed_div(is_in_table=False)
+                current_block_print = True
+
+        # end of paragraph
+        div += f'</div>'
+
+        return div
+
+    def generate_long_print_div_element(self):
         """generates a random div element filled with text and replaces the
         given tag in the html string before it is returned"""
 
@@ -239,23 +350,32 @@ class TableCreator:
         float_alignment = self.float_align(self.float_alignment)
         text = self.get_random_text(*self.text_min_max_length)
 
-
         # create styled div
         div = f'<div class="print" style="{color}{align}{width}{float_alignment}{font_size}{font_weight}{margin}{font}">{text}</div>'
 
-        return html.replace(tag, div)
+        return div
 
-    def get_cell_text_and_style(self) -> str:
-        text = self.get_random_text(*self.table_text_length)
+    def generate_short_printed_div(self, is_in_table: bool) -> str:
+        blocklength = 1
+        while random.uniform(0, 1) < 0.33:
+            blocklength =+1
+        if is_in_table:
+            text = self.get_random_text(*self.table_text_length)
+        else:
+            temp_text_length = blocklength * self.table_text_length
+            text = self.get_random_text(*temp_text_length)
         font = self.get_random_font_family()
         color = self.get_random_color(*self.text_color_paras)
         font_size = self.get_random_font_size(*self.table_font_size)
         font_weight = self.get_random_font_weight()
         align = self.get_random_text_align(self.table_text_alignment)
 
-        return f'{color}{font_size}{font_weight}{font}{align}">{text}'
+        if is_in_table:
+            return f'<div class="print" style="{color}{font_size}{font_weight}{font}{align}">{text}</div>'
+        else:
+            return f'<div class="print" style="display: inline-block;">{text}</div>'
 
-    def generate_table(self, tag: str, html: str):
+    def generate_table(self, tag: str, html: str, image_processor: ImageProcessor):
         """generates a random table element and replaces the
         given tag in the html string before it is returned"""
 
@@ -268,7 +388,8 @@ class TableCreator:
         bottom = self.random_margin_bottom(2, 10)
         margin_right = self.random_margin_right(2, 10)
 
-        table = f'<table style="{style}{width}{float_alignment}{margin}{margin_right}{bottom}{border_radius}; position: relative;">'
+        table = f'<div style="text-align: center;">' \
+                f'<table style="{style}{width}{float_alignment}{margin}{margin_right}{bottom}{border_radius}; position: relative;">'
 
         column_count = r.randrange(*self.table_min_max_columns)
 
@@ -276,12 +397,23 @@ class TableCreator:
 
         for column in range(column_count):
             # create header <th> elements
-            table_cell_text = self.get_cell_text_and_style()
+
+            text = self.get_random_text(*self.table_text_length)
+            font = self.get_random_font_family()
+            color = self.get_random_color(*self.text_color_paras)
+            font_size = self.get_random_font_size(*self.table_font_size)
+            font_weight = self.get_random_font_weight()
+            align = self.get_random_text_align(self.table_text_alignment)
+
+            table_cell_text = f'{color}{font_size}{font_weight}{font}{align}">' \
+                              f' <div class="print">{text}</div>'
 
             border_style = self.border_style_table()
             table += f'<th style      ="{border_style}{table_cell_text}</th>'
 
         table += "</tr>"
+
+        max_column_width = int((self.size[0]-100) / column_count)
 
         for row in range(r.randrange(*self.table_min_max_rows)):
             # create row <tr> elements
@@ -293,35 +425,53 @@ class TableCreator:
                 # create <td> elements
                 divs = ""
 
-                if self.contains_handwriting and random.uniform(0,1) > 0.33:
+                if self.contains_handwriting and random.uniform(0, 1) > 0.33:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
-                        next_image = self.image_processor.get_next_image()
-                        divs += f'<div style="{next_image["transform"]}; width: fit-content; height: fit-content;' \
-                                f' position: relative; z-index: -1;" > '
-
-                        if next_image["writing_type"] == "HANDWRITING":
-                            for (path, text) in zip(next_image['path'], next_image['text']):
-                                divs += f'<img height=25 width="auto" src="{path}" ' \
-                                        f'class="{str(next_image["writing_type"])}" ' \
-                                        f'alt="{text}"> '
-                        else:
-                            divs += f'<img height=60 width=180 src="{next_image["path"]}" ' \
-                                    f'class="{str(next_image["writing_type"])}" ' \
-                                    f'alt="{next_image["name"]}">'
-                        divs += f' </div>'
+                        divs += self.get_random_written(max_width= max_column_width,
+                                                        image_processor = image_processor, is_in_table=True)
                     table += f'<td style="{style}{color};text-align:center; position: relative">{divs}</td>'
                 else:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
                         # create <div> elements in each table cell for controlled multiline entries
-                        table_cell_text = self.get_cell_text_and_style()
 
-                        divs += f'<div class="print" style="{table_cell_text}</div>'
+                        divs += self.generate_short_printed_div(is_in_table=True)
                     table += f'<td style="{style}{color}">{divs}</td>'
-
             table += "</tr>"
-        table += "</table>"
+        table += "</table></div>"
 
         return html.replace(tag, table)
+
+    def get_random_written(self, image_processor:  ImageProcessor,  is_in_table: bool,
+                           max_height:int = None, max_width: int = None) -> str:
+        result = ""
+        next_image = image_processor.get_next_image()
+        transform = f'transform: translate({next_image["transform"]["translate"] if is_in_table else ""}) ' \
+                    f'rotate({next_image["transform"]["rotation"]}deg) scale({next_image["transform"]["scale"]})'
+        inline_block = "display: inline-block;" if not is_in_table else ""
+        result += f'<div class ="box_{str(next_image["writing_type"])}" style="{transform}; {inline_block} ' \
+                  f'width: fit-content; height: fit-content; position: relative; z-index: -1;" > '
+
+        if next_image["writing_type"] == "HANDWRITING":
+            for i, (path, text, shape) in enumerate(zip(next_image['path'], next_image['text'], next_image['shape'])):
+                new_height = max_height if max_height else 25
+                next_image['shape'][i] = (
+                    (next_image['shape'][i][0] / next_image['shape'][i][1]) * new_height, new_height)
+                result += f'<img height={new_height} width="auto" src="{path}" ' \
+                          f'class="{str(next_image["writing_type"])}" ' \
+                          f'alt="{text}"> '
+        else:
+            new_height = max_height if max_height else 60
+            next_image['shape'] = ((next_image['shape'][0] / next_image['shape'][1]) * new_height, new_height)
+            if max_width:
+                if max_width < next_image['shape'][0]:
+                    next_image['shape'] = (max_width,  max_width * (next_image['shape'][1] / next_image['shape'][0]) )
+            result += f'<img height={next_image["shape"][1]} width={next_image["shape"][0]} ' \
+                      f'src="{next_image["path"]}" ' \
+                      f'class="{str(next_image["writing_type"])}" ' \
+                      f'alt="{next_image["name"]}">'
+        result += f' </div>'
+
+        return result
 
     def set_background(self, html: str):
         """sets the background of the html document randomly.
@@ -352,7 +502,6 @@ class TableCreator:
         end = r.randrange(start + min, start + max)
 
         return constants.lorem[start:end]
-
 
     def get_random_font_size(self, min: int, max: int):
         """gets a random font size between your min and max,
