@@ -72,9 +72,9 @@ def get_signature_annotations(image_boxes, list_signatures, overlay_image=None):
                 boxes.append(box_data)
 
             else:
-                print(f"Error: len(all_candidates) != 1, but was {len(all_candidates)}")
+                raise Exception(f"Error: Did not find one matching signature, instead found {len(all_candidates)}")
         else:
-            print("Error: M['m00']==0")
+            Exception(f"Error: Contour has zero area")
 
     return boxes
 
@@ -111,10 +111,12 @@ def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=Non
                 else:
                     handwriting_group['color_box'] = [new_color_box]
                 list_handwriting.append(handwriting_group)
+
             else:
-                print(f"Error: len(all_candidates) != 1, but was {len(all_candidates)}")
-        else:
-            print("Error: M['m00']==0")
+                raise Exception(f"Error: Did not find one matching handwriting, instead found {len(all_candidates)}")
+    else:
+        Exception(f"Error: Contour has zero area")
+
 
     # for each handwriting_group one bounding_box
     for handwriting_group in list_handwriting:
@@ -141,7 +143,7 @@ def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=Non
             if overlay_image is not None:
                 overlay_image = cv2.rectangle(overlay_image, total_bot_left, total_top_right, (0, 255, 0), thickness)
         else:
-            print("this group does not have color_box: ", handwriting_group['text'])
+            raise Exception(F"handwriting group {handwriting_group['text']} has no matching color_box")
 
     return boxes
 

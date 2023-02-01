@@ -4,6 +4,7 @@ import AnnotationExtractor
 import writer
 from threading import Thread
 import threading
+import logging
 
 from ThreadSafeCounter import ThreadSafeCounter
 
@@ -18,22 +19,31 @@ def __create_tables(table_creator: TableCreator, folder):
     overlay = images[TableCreator.REGULAR].copy()
     dict_written_images = image_processor.images
 
-    signature_boxes = AnnotationExtractor.get_signature_annotations(
-        images[TableCreator.SIGNATURES_BOXES], dict_written_images['signatures'], overlay)
+    try:
+        signature_boxes = AnnotationExtractor.get_signature_annotations(
+            images[TableCreator.SIGNATURES_BOXES], dict_written_images['signatures'], overlay)
 
-    handwritten_boxes = AnnotationExtractor.get_handwritten_annotations(
-        images[TableCreator.HANDWRITING_BOXES], dict_written_images['handwritten'], overlay)
+        handwritten_boxes = AnnotationExtractor.get_handwritten_annotations(
+            images[TableCreator.HANDWRITING_BOXES], dict_written_images['handwritten'], overlay)
 
-    print_boxes = AnnotationExtractor.get_print_annotations(images[TableCreator.PRINT_BOXES], overlay)
+        print_boxes = AnnotationExtractor.get_print_annotations(images[TableCreator.PRINT_BOXES], overlay)
+
+        images[TableCreator.TABLE], table_boxes = AnnotationExtractor.get_table_annotations(images[TableCreator.TABLE])
+
+        images[TableCreator.CELL], boxes = AnnotationExtractor.get_cell_annotations(table_boxes,
+                                                                                    images[TableCreator.CELL],
+                                                                                    images[TableCreator.TABLE_LINES],
+                                                                                    overlay)
+
+        writer.write(images, overlay, boxes, prefix, folder=folder)
+
+    except Exception as error:
+        logging.warning("Exception thrown:" + repr(error))
 
     image_processor.clean_up()
 
-    images[TableCreator.TABLE], table_boxes = AnnotationExtractor.get_table_annotations(images[TableCreator.TABLE])
 
-    images[TableCreator.CELL], boxes = AnnotationExtractor.get_cell_annotations(table_boxes, images[TableCreator.CELL],
-                                                                                images[TableCreator.TABLE_LINES],
-                                                                                overlay)
-    writer.write(images, overlay, boxes, prefix, folder=folder)
+
 
 
 def __create_table_loop(table_creator, folder, file_count, counter: ThreadSafeCounter):

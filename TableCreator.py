@@ -24,7 +24,7 @@ PRINT_BOXES = 'print_boxes'
 
 class TableCreator:
 
-    def __init__(self, html_template='templates/index.html', size=(2200, 1500), min_max_div=(1000, 1200),
+    def __init__(self, html_template='templates/index.html', size=(1500, 2200), min_max_div=(1000, 1200),
                  table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(1, 4), table_font_size=(16, 25),
                  text_color_paras=(0, 50, 0.7, 1.0), table_min_max_columns=(4, 7), table_text_length=(10, 20),
                  table_min_max_rows=(4, 9), table_min_max_lines_in_row=(1, 2), div_font_size=(20, 30),
@@ -277,7 +277,9 @@ class TableCreator:
         os.remove(f'temp_html/{prefix}_print.png')
         os.remove(f'temp_html/{prefix}_signatures_boxes.png')
         os.remove(f'temp_html/{prefix}_signatures.png')
-        # todo: remove other temp files
+        os.remove(f'temp_html/{prefix}_handwritten_boxes.png')
+        os.remove(f'temp_html/{prefix}_handwritten.png')
+
 
     def replace_headline(self, tag: str, html: str):
         """generates a random <h1> headline and replaces the given tag in the html string before it is returned"""
@@ -294,7 +296,6 @@ class TableCreator:
              f'</h1>'
         return html.replace(tag, h1)
 
-    # todo: div elements with handwritten images?
     def generate_div_element(self, tag: str, html: str, image_processor: ImageProcessor):
         if self.contains_handwriting and random.uniform(0, 1) > 0.5:
             div = self.generate_mixed_div_element(image_processor = image_processor)
@@ -442,7 +443,7 @@ class TableCreator:
         return html.replace(tag, table)
 
     def get_random_written(self, image_processor:  ImageProcessor,  is_in_table: bool,
-                           max_height:int = None, max_width: int = None) -> str:
+                           max_height: int = None, max_width: int = None) -> str:
         result = ""
         next_image = image_processor.get_next_image()
         transform = f'transform: translate({next_image["transform"]["translate"] if is_in_table else ""}) ' \
