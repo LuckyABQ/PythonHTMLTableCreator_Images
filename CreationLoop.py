@@ -30,10 +30,11 @@ def __create_tables(table_creator: TableCreator, folder):
 
         images[TableCreator.TABLE], table_boxes = AnnotationExtractor.get_table_annotations(images[TableCreator.TABLE])
 
-        images[TableCreator.CELL], boxes = AnnotationExtractor.get_cell_annotations(table_boxes,
-                                                                                    images[TableCreator.CELL],
-                                                                                    images[TableCreator.TABLE_LINES],
-                                                                                    overlay)
+        images[TableCreator.CELL], boxes, horizontal_lines, vertical_lines = AnnotationExtractor.get_cell_annotations(
+            table_boxes,
+            images[TableCreator.CELL],
+            images[TableCreator.TABLE_LINES],
+            overlay)
 
         writer.write(images, overlay, boxes, prefix, folder=folder)
 
@@ -41,9 +42,6 @@ def __create_tables(table_creator: TableCreator, folder):
         logging.warning("Exception thrown:" + repr(error))
 
     image_processor.clean_up()
-
-
-
 
 
 def __create_table_loop(table_creator, folder, file_count, counter: ThreadSafeCounter):

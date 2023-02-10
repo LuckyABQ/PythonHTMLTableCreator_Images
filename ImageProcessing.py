@@ -90,11 +90,6 @@ class ImageProcessor:
                 os.remove(color_box)
                 os.remove(binary)
 
-
-
-
-
-
     @staticmethod
     def replace_image_with_boxes(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")

@@ -117,7 +117,6 @@ def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=Non
     else:
         Exception(f"Error: Contour has zero area")
 
-
     # for each handwriting_group one bounding_box
     for handwriting_group in list_handwriting:
         if 'color_box' in handwriting_group:
@@ -191,7 +190,7 @@ def get_print_annotations(image_boxes, image_to_overlay=None):
     grey_image_boxes = cv2.cvtColor(image_boxes, cv2.COLOR_BGR2GRAY)
     contours, hierarchy = cv2.findContours(grey_image_boxes, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
-    boxes=[]
+    boxes = []
 
     for cnt in reversed(contours):
         x, y, w, h = cv2.boundingRect(cnt)
@@ -205,6 +204,7 @@ def get_print_annotations(image_boxes, image_to_overlay=None):
             cv2.rectangle(image_to_overlay, (x, y), (x + w, y + h), (255, 0, 0), 1)
 
     return boxes
+
 
 def get_cell_annotations(table_boxes, original_cell_mask, table_line_mask=None, image_to_overlay=None):
     """calculates the boxes for the cells based on the boxes for the table and returns it as a numpy array and a list.
@@ -271,7 +271,110 @@ def get_cell_annotations(table_boxes, original_cell_mask, table_line_mask=None, 
             image_to_overlay[:, :, 2][table_line_mask[:, :, 2] > 0] = 255
             image_to_overlay[:, :, 0:1][table_line_mask[:, :, 0:1] > 0] = 0
 
-    return cell_mask, boxes_for_tables
+        horizontal_lines, vertical_lines = get_line_annotations(table_box, boxes, columns, rows)
+
+    return cell_mask, boxes_for_tables, horizontal_lines, vertical_lines
+
+
+def get_line_annotations(tablebox, boxes, columns, rows):
+    # max and min values for inner-line-coordinates
+    y_min, y_max = 0, 0
+    x_min, x_max = 0, 0
+
+    # get vertical lines separating two cells
+    vertical_short_lines = []
+    for row in range(len(rows)):
+        current_row = [box for box in boxes if box['row'] == row]
+        for col in range(len(columns) - 1):
+            left_box = next((box for box in current_row if box['column'] == col), None)
+            right_box = next((box for box in current_row if box['column'] == col + 1), None)
+            line = get_vertical_separating_line(left_box, right_box)
+            line['row'] = row
+            line['column'] = col
+            vertical_short_lines.append(line)
+
+    # merge vertical lines to one large line
+    vertical_lines = []
+    for col in range(len(columns) - 1):
+        column_lines = [line for line in vertical_short_lines if line['column'] == col]
+        start_line = next((line for line in column_lines if line['row'] == 0), None)
+        end_line = next((line for line in column_lines if line['row'] == len(rows) - 1), None)
+        merged_line = {'startPoint': start_line['startPoint'], 'endPoint': end_line['endPoint']}
+        vertical_lines.append(merged_line)
+        y_min, y_max = start_line['startPoint'][1], end_line['endPoint'][1]
+
+    # get horizontal lines separating two cells
+    horizontal_short_lines = []
+    for col in range(len(columns)):
+        current_column = [box for box in boxes if box['column'] == col]
+        for row in range(len(rows) - 1):
+            top_box = next((box for box in current_column if box['row'] == row), None)
+            bottom_box = next((box for box in current_column if box['row'] == row + 1), None)
+            line = get_horizontal_separating_line(top_box, bottom_box)
+            line['row'] = row
+            line['column'] = col
+            horizontal_short_lines.append(line)
+
+    # merge horizontal lines to one large line
+    horizontal_lines = []
+    for row in range(len(rows) - 1):
+        row_lines = [line for line in horizontal_short_lines if line['row'] == row]
+        start_line = next((line for line in row_lines if line['column'] == 0), None)
+        end_line = next((line for line in row_lines if line['column'] == len(columns) - 1), None)
+        merged_line = {'startPoint': start_line['startPoint'], 'endPoint': end_line['endPoint']}
+        horizontal_lines.append(merged_line)
+        x_min, x_max = start_line['startPoint'][0], end_line['endPoint'][0]
+
+    top_line, bottom_line, left_line, right_line = get_surrounding_lines_of_table(tablebox, y_min, y_max, x_min, x_max)
+
+    horizontal_lines.append(top_line)
+    horizontal_lines.append(bottom_line)
+
+    vertical_lines.append(right_line)
+    vertical_lines.append(left_line)
+
+    return horizontal_lines, vertical_lines
+
+
+def get_surrounding_lines_of_table(tablebox, y_min, y_max, x_min, x_max):
+    # get surrounding boxes of table
+    x_start = calc_middle(tablebox['xStart'], x_min)
+    x_end = calc_middle(x_max, tablebox['xEnd'])
+    y_start = calc_middle(y_min, tablebox['yStart'])
+    y_end = calc_middle(tablebox['yEnd'], y_max)
+    top_line = {'startPoint': (x_start, y_start),
+                'endPoint': (x_end, y_start)}
+    bottom_line = {'startPoint': (x_start, y_end),
+                   'endPoint': (x_end, y_end)}
+
+    left_line = {'startPoint': (x_start, y_start),
+                 'endPoint': (x_start, y_end)}
+    right_line = {'startPoint': (x_end, y_start),
+                  'endPoint': (x_end, y_end)}
+
+    return top_line, bottom_line, left_line, right_line
+
+
+def calc_middle(higher_value, lower_value):
+    return int((higher_value - lower_value) / 2 + lower_value)
+
+
+def get_horizontal_separating_line(top_box, bottom_box):
+    x_start = min(top_box['xStart'], bottom_box['xStart'])
+    y_start = int(top_box['yEnd'] + ((bottom_box['yStart'] - top_box['yEnd']) / 2))
+
+    x_end = max(top_box['xEnd'], bottom_box['xEnd'])
+    y_end = int(top_box['yEnd'] + ((bottom_box['yStart'] - top_box['yEnd']) / 2))
+    return {'startPoint': (x_start, y_start), 'endPoint': (x_end, y_end)}
+
+
+def get_vertical_separating_line(left_box, right_box):
+    y_start = min(left_box['yStart'], right_box['yStart'])
+    x_start = int(left_box['xEnd'] + ((right_box['xStart'] - left_box['xEnd']) / 2))
+
+    y_end = max(left_box['yEnd'], right_box['yEnd'])
+    x_end = int(left_box['xEnd'] + ((right_box['xStart'] - left_box['xEnd']) / 2))
+    return {'startPoint': (x_start, y_start), 'endPoint': (x_end, y_end)}
 
 
 def check_and_add(list, value):
