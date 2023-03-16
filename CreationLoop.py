@@ -30,7 +30,7 @@ def __create_tables(table_creator: TableCreator, folder):
 
         images[TableCreator.TABLE], table_boxes = AnnotationExtractor.get_table_annotations(images[TableCreator.TABLE])
 
-        images[TableCreator.CELL], boxes, horizontal_lines, vertical_lines = AnnotationExtractor.get_cell_annotations(
+        images[TableCreator.CELL], boxes = AnnotationExtractor.get_cell_annotations(
             table_boxes,
             images[TableCreator.CELL],
             images[TableCreator.TABLE_LINES],

@@ -2,11 +2,14 @@ import random
 import constants
 import random as r
 from html2image import Html2Image
+from datetime import date
+import imgkit
 import uuid
 import os
 import cv2
 import re
 from ImageProcessing import ImageProcessor
+from numpy.random import choice
 
 TAG_REGEX = r"#tag_([A-Za-z]+)_[0-9]+#"
 
@@ -25,16 +28,16 @@ PRINT_BOXES = 'print_boxes'
 class TableCreator:
 
     def __init__(self, html_template='templates/index.html', size=(1500, 2200), min_max_div=(1000, 1200),
-                 table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(1, 4), table_font_size=(16, 25),
+                 table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(1, 2), table_font_size=(16, 25),
                  text_color_paras=(0, 50, 0.7, 1.0), table_min_max_columns=(4, 7), table_text_length=(10, 20),
                  table_min_max_rows=(4, 9), table_min_max_lines_in_row=(1, 2), div_font_size=(20, 30),
                  text_min_max_length=(200, 1000), div_top_margin=(20, 100),
                  head_line_text_length=(25, 75), head_line_margin_top=(5, 10), head_line_margin_bottom=(5, 30),
                  head_line_font_size=(25, 55), head_line_text_alignment=['center', 'left', 'right'],
-                 border_radius_min_max=(0, 10), line_types=['solid'],
+                 border_radius_min_max=(0, 10), line_types=['solid', 'none'],
                  collapse_types=['collapse'], table_text_alignment=['center', 'left', 'right'],
                  text_alignment=['center', 'left', 'right'], table_float_alignment=['left', 'right'],
-                 float_alignment=['left', 'right'], contains_handwriting: bool = False):
+                 float_alignment=['left', 'right'], contains_handwriting: bool = True, border_distribution = (0.5, 0.5)):
 
         self.html_template = html_template
         self.size = size
@@ -63,6 +66,7 @@ class TableCreator:
         self.head_line_font_size = head_line_font_size
         self.head_line_text_alignment = head_line_text_alignment
         self.contains_handwriting = contains_handwriting
+        self.border_distribution = border_distribution
 
     def load_template(self, image_processor: ImageProcessor):
         """generate image based on your template and parameters.
@@ -124,8 +128,7 @@ class TableCreator:
         """turns everything black but the table lines white"""
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
-        table_style = "table, tr, th, td {color: transparent !important; border-color: white !important; " \
-                      "border-style: solid !important}"
+        table_style = "table, tr, th, td {color: transparent !important; border-color: white !important;}"
         img_style = "img{opacity: 0.0}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style}')
 
@@ -143,7 +146,7 @@ class TableCreator:
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: transparent !important;border-style: solid !important}"
+                      "border-color: transparent !important;}"
         writing_style = ".SIGNATURE {opacity: 0.0; } "
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {writing_style} ')
 
@@ -152,7 +155,7 @@ class TableCreator:
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: transparent !important;border-style: solid !important}"
+                      "border-color: transparent !important;}"
         signature_style = ".SIGNATURE {opacity: 0.0;}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {signature_style} ')
 
@@ -162,7 +165,7 @@ class TableCreator:
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: transparent !important;border-style: solid !important}"
+                      "border-color: transparent !important;}"
         writing_style = ".HANDWRITING {opacity: 0.0;}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {writing_style}')
 
@@ -171,7 +174,7 @@ class TableCreator:
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: transparent !important;border-style: solid !important}"
+                      "border-color: transparent !important;}"
         handwriting_style = ".HANDWRITING {opacity: 0.0; z-index: 2 !important;}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {handwriting_style}')
 
@@ -180,7 +183,7 @@ class TableCreator:
         div_style = "span, div  {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
         table_style = "table, tr, th, td {color: transparent !important;" \
-                      "border-color: transparent !important;border-style: solid !important}"
+                      "border-color: transparent !important;}"
         img_style = "img{opacity: 0.0}"
         print_box_style = ".print {background-color: white; border:1px solid black; display: inline-block !important}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style}{print_box_style}')
@@ -190,7 +193,7 @@ class TableCreator:
         div_style = "h1, h2, h3, h4, h5, span, div {color: rgba(255,255,255,255) !important;}"
         body_style = "body {color: rgba(255,255,255,255) !important; background: black !important}"
         table_style = "table, tr, th, td {color: rgba(255,255,255,255) !important;" \
-                      "border-color: rgba(0,0,0,0) !important;border-style: solid !important}"
+                      "border-color: rgba(0,0,0,0) !important;}"
         img_style = "img{opacity: 0.0}"
         print_style = ".print {color: rgba(255, 255, 255, 255), !important;}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style} {print_style}')
@@ -202,7 +205,7 @@ class TableCreator:
 
         html = ImageProcessor.normalize_with_beautifulsoup(html)
 
-        hti = Html2Image()
+
         prefix = uuid.uuid4()
         html_cell = self.get_cell_html(html)
         html_table = self.get_table_html(html)
@@ -231,18 +234,19 @@ class TableCreator:
         with open("temp_html/temp_html_mask_table.html", "w") as text_file:
             text_file.write(html_table)
 
-        hti.output_path = "temp_html"
-        hti.screenshot(html_str=html, save_as=f'{prefix}_regular.png', size=self.size)
-        hti.screenshot(html_str=html_table, save_as=f'{prefix}_table.png', size=self.size)
-        hti.screenshot(html_str=html_table_lines, save_as=f'{prefix}_table_lines.png', size=self.size)
-        hti.screenshot(html_str=html_cell, save_as=f'{prefix}_cell.png', size=self.size)
-        hti.screenshot(html_str=html_handwritten, save_as=f'{prefix}_handwritten.png', size=self.size)
-        hti.screenshot(html_str=html_signatures, save_as=f'{prefix}_signatures.png', size=self.size)
-        hti.screenshot(html_str=html_handwritten_boxes, save_as=f'{prefix}_handwritten_boxes.png', size=self.size)
-        hti.screenshot(html_str=html_signatures_boxes, save_as=f'{prefix}_signatures_boxes.png', size=self.size)
+        options = {'enable-local-file-access': ""}
+        image_file_name_pairs = [[html, 'regular'], [html_table, 'table'], [html_table_lines, 'table_lines'],
+                                 [html_cell, 'cell'], [html_handwritten, 'handwritten'],
+                                 [html_signatures, 'signatures'], [html_handwritten_boxes, 'handwritten_boxes'],
+                                 [html_signatures_boxes, 'signatures_boxes'], [html_print, 'print'],
+                                 [html_print_boxes, 'print_boxes']]
 
-        hti.screenshot(html_str=html_print, save_as=f'{prefix}_print.png', size=self.size)
-        hti.screenshot(html_str=html_print_boxes, save_as=f'{prefix}_print_boxes.png', size=self.size)
+        hti = Html2Image()
+        hti.output_path ="temp_html"
+
+        [hti.screenshot(html_str=item[0], save_as=f'{prefix}_{item[1]}.png', size=self.size) for item in
+         image_file_name_pairs]
+
 
         with open("temp_html/temp_html_regular.html", "w") as text_file:
             text_file.write(html)
@@ -361,7 +365,8 @@ class TableCreator:
         while random.uniform(0, 1) < 0.33:
             blocklength =+1
         if is_in_table:
-            text = self.get_random_text(*self.table_text_length)
+            text =[self.get_random_text(*self.table_text_length), self.get_random_number(), self.get_random_date()]
+            text = random.choice(text)
         else:
             temp_text_length = blocklength * self.table_text_length
             text = self.get_random_text(*temp_text_length)
@@ -418,13 +423,13 @@ class TableCreator:
 
         for row in range(r.randrange(*self.table_min_max_rows)):
             # create row <tr> elements
-            style = self.border_style_table()
             color = self.get_random_color(*self.text_color_paras)
             table += f'<tr style="{style}">'
 
             for column in range(column_count):
                 # create <td> elements
                 divs = ""
+                style = self.border_style_table()
 
                 if self.contains_handwriting and random.uniform(0, 1) > 0.33:
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
@@ -432,6 +437,7 @@ class TableCreator:
                                                         image_processor = image_processor, is_in_table=True)
                     table += f'<td style="{style}{color};text-align:center; position: relative">{divs}</td>'
                 else:
+
                     for cellText in range(r.randrange(*self.table_min_max_lines_in_row)):
                         # create <div> elements in each table cell for controlled multiline entries
 
@@ -504,6 +510,32 @@ class TableCreator:
 
         return constants.lorem[start:end]
 
+    def get_random_number(self):
+        number_range = [random.random(), random.randint(0, 1000000), random.randint(-1000, 1000)]
+        return str(random.choice(number_range))
+
+    def get_random_date(self):
+        """Get a time at a proportion of a range of two formatted times.
+
+        start and end should be strings specifying times formatted in the
+        given format (strftime-style), giving an interval [start, end].
+        prop specifies how a proportion of the interval to be taken after
+        start.  The returned time will be in the specified format.
+        """
+
+        start = date.fromisoformat('1900-01-01')
+        end = date.fromisoformat('2024-12-31')
+        prop = random.random()
+
+        ptime = start + prop * (end - start)
+
+        time_formats = ['%m/%d/%Y', '%d.%m.%Y']
+        time_format = random.choice(time_formats)
+
+        return ptime.strftime(time_format)
+
+
+
     def get_random_font_size(self, min: int, max: int):
         """gets a random font size between your min and max,
                 min is inclusive, max is exclusive"""
@@ -544,9 +576,11 @@ class TableCreator:
         check out the available styles https://www.w3schools.com/css/css_border.asp"""
 
         color = self.get_random_rgba(*self.table_line_color_paras)
+
+        border_line_type = choice(self.line_types, p=self.border_distribution)
+
         border_line = r.randrange(*self.table_line_width)
 
-        border_line_type = self.line_types[r.randrange(0, len(self.line_types))]
         border_collapse = self.collapse_types[r.randrange(0, len(self.collapse_types))]
 
         style = f'border: {border_line}px {border_line_type} {color}; position: relative; border-collapse: {border_collapse}; '

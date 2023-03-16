@@ -72,9 +72,9 @@ def get_signature_annotations(image_boxes, list_signatures, overlay_image=None):
                 boxes.append(box_data)
 
             else:
-                raise Exception(f"Error: Did not find one matching signature, instead found {len(all_candidates)}")
+                print(f"Warning: Did not find one matching signature, instead found {len(all_candidates)}")
         else:
-            Exception(f"Error: Contour has zero area")
+            print(f"Warning: Contour has zero area")
 
     return boxes
 
@@ -113,9 +113,9 @@ def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=Non
                 list_handwriting.append(handwriting_group)
 
             else:
-                raise Exception(f"Error: Did not find one matching handwriting, instead found {len(all_candidates)}")
+                print(f"Warning: Did not find one matching handwriting, instead found {len(all_candidates)}")
     else:
-        Exception(f"Error: Contour has zero area")
+        print(f"Warning: Contour has zero area")
 
     # for each handwriting_group one bounding_box
     for handwriting_group in list_handwriting:
@@ -142,7 +142,7 @@ def get_handwritten_annotations(image_boxes, list_handwriting, overlay_image=Non
             if overlay_image is not None:
                 overlay_image = cv2.rectangle(overlay_image, total_bot_left, total_top_right, (0, 255, 0), thickness)
         else:
-            raise Exception(F"handwriting group {handwriting_group['text']} has no matching color_box")
+            print(f"Warning: handwriting group {handwriting_group['text']} has no matching color_box")
 
     return boxes
 
@@ -262,8 +262,7 @@ def get_cell_annotations(table_boxes, original_cell_mask, table_line_mask=None, 
             box['column'] = get_index_of_sorted_list(columns, box['xStart'])
             box['row'] = get_index_of_sorted_list(rows, box['yStart'])
 
-        table_box['boxes'] = boxes
-        boxes_for_tables.append(table_box)
+
 
         if image_to_overlay is not None:
             # generate an overlay to check that the annotations line up with the real table, this is for debugging
@@ -271,9 +270,14 @@ def get_cell_annotations(table_boxes, original_cell_mask, table_line_mask=None, 
             image_to_overlay[:, :, 2][table_line_mask[:, :, 2] > 0] = 255
             image_to_overlay[:, :, 0:1][table_line_mask[:, :, 0:1] > 0] = 0
 
+        table_box['boxes'] = boxes
         horizontal_lines, vertical_lines = get_line_annotations(table_box, boxes, columns, rows)
+        boxes_for_tables.append(table_box)
 
-    return cell_mask, boxes_for_tables, horizontal_lines, vertical_lines
+        table_box['horizontal_lines'] , table_box['vertical_lines']\
+            = get_line_annotations(table_box, boxes, columns, rows)
+
+    return cell_mask, boxes_for_tables
 
 
 def get_line_annotations(tablebox, boxes, columns, rows):

@@ -20,6 +20,7 @@ def write(images, overlay_image, boxes, prefix, folder='generate'):
         json.dump(boxes, f, ensure_ascii=False, indent=4)
 
 
+
 def delete_all(folder='generate'):
     """delete all files recursively (not folders)"""
     for path in os.listdir(folder):
