@@ -33,9 +33,9 @@ def __create_tables(table_creator: TableCreator, folder):
         images[TableCreator.CELL], boxes = AnnotationExtractor.get_cell_annotations(
             table_boxes,
             images[TableCreator.CELL],
-            images[TableCreator.TABLE_LINES],
+            images[TableCreator.TABLE_LINES_VERTICAL],
+            images[TableCreator.TABLE_LINES_HORIZONTAL],
             overlay)
-
         writer.write(images, overlay, boxes, prefix, folder=folder)
 
     except Exception as error:

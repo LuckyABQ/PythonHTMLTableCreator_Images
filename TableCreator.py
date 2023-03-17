@@ -15,7 +15,8 @@ TAG_REGEX = r"#tag_([A-Za-z]+)_[0-9]+#"
 
 REGULAR = 'regular'
 TABLE = 'table'
-TABLE_LINES = 'table_lines'
+TABLE_LINES_VERTICAL = 'table_lines_vertical'
+TABLE_LINES_HORIZONTAL = 'table_lines_horizontal'
 CELL = 'cell'
 HANDWRITING = 'handwriting'
 HANDWRITING_BOXES = 'handwriting_boxes'
@@ -124,11 +125,22 @@ class TableCreator:
         img_style = "img{opacity: 0.0}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {cell_style} {img_style}')
 
-    def get_table_lines_html(self, html):
+    def get_table_lines_html(self, html, vertical: bool):
         """turns everything black but the table lines white"""
         div_style = "h1, h2, h3, h4, h5, span, div {color: transparent !important;}"
         body_style = "body {color: transparent !important; background: black !important}"
-        table_style = "table, tr, th, td {color: transparent !important; border-color: white !important;}"
+        if vertical:
+            table_style = "table, tr, th, td {color: transparent !important; " \
+                          "border-left-color: white !important;" \
+                          "border-right-color: white !important;" \
+                          "border-top-color: black !important;" \
+                          "border-bottom-color: black !important;}"
+        else:
+            table_style = "table, tr, th, td {color: transparent !important; " \
+                          "border-left-color: black !important;" \
+                          "border-right-color: black !important;" \
+                          "border-top-color: white !important;" \
+                          "border-bottom-color: white !important;}"
         img_style = "img{opacity: 0.0}"
         return html.replace('/*#custom*/', f'{div_style} {body_style} {table_style} {img_style}')
 
@@ -209,7 +221,8 @@ class TableCreator:
         prefix = uuid.uuid4()
         html_cell = self.get_cell_html(html)
         html_table = self.get_table_html(html)
-        html_table_lines = self.get_table_lines_html(html)
+        html_table_lines_vertical = self.get_table_lines_html(html, True)
+        html_table_lines_horizontal = self.get_table_lines_html(html, False)
 
         html_print = self.get_printed_html(html)
         html_print_boxes = self.get_printed_boxes_html(html)
@@ -235,7 +248,9 @@ class TableCreator:
             text_file.write(html_table)
 
         options = {'enable-local-file-access': ""}
-        image_file_name_pairs = [[html, 'regular'], [html_table, 'table'], [html_table_lines, 'table_lines'],
+        image_file_name_pairs = [[html, 'regular'], [html_table, 'table'],
+                                 [html_table_lines_vertical, 'table_lines_vertical'],
+                                 [html_table_lines_horizontal, 'table_lines_horizontal'],
                                  [html_cell, 'cell'], [html_handwritten, 'handwritten'],
                                  [html_signatures, 'signatures'], [html_handwritten_boxes, 'handwritten_boxes'],
                                  [html_signatures_boxes, 'signatures_boxes'], [html_print, 'print'],
@@ -253,7 +268,8 @@ class TableCreator:
 
         regular_img = cv2.imread(f'temp_html/{prefix}_regular.png')
         table_img = cv2.imread(f'temp_html/{prefix}_table.png')
-        table_lines_img = cv2.imread(f'temp_html/{prefix}_table_lines.png')
+        table_lines_vertical_img = cv2.imread(f'temp_html/{prefix}_table_lines_vertical.png')
+        table_lines_horizontal_img = cv2.imread(f'temp_html/{prefix}_table_lines_horizontal.png')
         cell_img = cv2.imread(f'temp_html/{prefix}_cell.png')
         handwritten_img = cv2.imread(f'temp_html/{prefix}_handwritten.png')
         signature_img = cv2.imread(f'temp_html/{prefix}_signatures.png')
@@ -262,9 +278,10 @@ class TableCreator:
         print_img = cv2.imread(f'temp_html/{prefix}_print.png')
         print_boxes_img = cv2.imread(f'temp_html/{prefix}_print_boxes.png')
 
-        self.clean_up(prefix)
+        #self.clean_up(prefix)
 
-        return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES: table_lines_img,
+        return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES_VERTICAL: table_lines_vertical_img,
+                TABLE_LINES_HORIZONTAL: table_lines_horizontal_img,
                 CELL: cell_img, HANDWRITING: handwritten_img, SIGNATURES: signature_img,
                 HANDWRITING_BOXES: handwritten_boxes_img, SIGNATURES_BOXES: signatures_boxes_img,
                 PRINT_BOXES: print_boxes_img, PRINT: print_img}, \
@@ -577,13 +594,14 @@ class TableCreator:
 
         color = self.get_random_rgba(*self.table_line_color_paras)
 
-        border_line_type = choice(self.line_types, p=self.border_distribution)
-
         border_line = r.randrange(*self.table_line_width)
 
         border_collapse = self.collapse_types[r.randrange(0, len(self.collapse_types))]
 
-        style = f'border: {border_line}px {border_line_type} {color}; position: relative; border-collapse: {border_collapse}; '
+        border_style = "".join([f"border-{side}: {border_line}px {choice(self.line_types, p=self.border_distribution)} {color};"
+                                for side in ["left", "right", "top", "bottom"]])
+
+        style = f'{border_style} position: relative; border-collapse: {border_collapse}; '
 
         return style
 
