@@ -1,9 +1,9 @@
-import re
-import glob2
-from PIL import Image, ImageDraw
+import json
+import pathlib
+from PIL import Image
 import random
 from typing import List, Dict
-from collections import Counter
+import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 import os
@@ -35,33 +35,35 @@ class ColorGenerator:
 
 
 handwriting_root_path = \
-    Path(r'data/handwriting_images/')
+    Path(r'/home/lukas/Documents/data/html_generation_data/handwriting')
 
 signatures_root_path = \
-    Path(r'data/signatures/')
+    Path(r'/home/lukas/Documents/data/html_generation_data/signatures/no_background/')
 
-# todo: absolute path necessary for html
-temp_images_path = \
-    Path(r'/home/lukas/PycharmProjects/HTMLGeneration/PythonHtmlTableCreator/data/temp_images/')
 
 
 class ImageProcessor:
-    def __init__(self, probability_signatures: float = 0.5):
+    def __init__(self, probability_signatures: float = 0.5, has_offsets: bool = True):
         self.images = {'handwritten': [], 'signatures': []}
         self.probability_signatures = probability_signatures
         self.counter_signatures = 0
         self.counter_handwriting = 0
+        self.handwriting_root_path = handwriting_root_path
+        self.has_offsets = has_offsets
 
         # preloading of handwriting images:
         # the text inside the images is only loaded, when needed
-        self.paths_all_handwriting = [x for x in handwriting_root_path.rglob('*.png')]
+        with open(f"{handwriting_root_path}/words.json") as f:
+            self.paths_all_handwriting =json.load(f)
 
-        # load signatures
+
+            # load signatures
         suffixes = ['.png', '.PNG']
         self.paths_all_signature = [x for x in signatures_root_path.rglob('*') if x.suffix in suffixes]
 
         self.color_generator = ColorGenerator()
 
+    #needs refactoring
     def clean_up(self):
         """
         deletes all preloaded, and pre processed images that were created by this ImageProcessor
@@ -71,43 +73,66 @@ class ImageProcessor:
         for signatures in self.images['signatures']:
             # get all paths
             original_image = signatures['path']
-            color_box = original_image.replace("no_background", "color_box")
-            binary = original_image.replace("no_background", "binary")
+            color = signatures['color_string']
+            color_box = original_image.replace("no_background/", f"color_box/{color}_")
 
             # remove their files
-            os.remove(original_image)
             os.remove(color_box)
-            os.remove(binary)
+
 
         for handwritten in self.images['handwritten']:
-            for original_image in handwritten['path']:
+            for (original_image, color) in zip(handwritten['path'], handwritten['color_string']):
                 # get all paths
-                color_box = original_image.replace("no_background", "color_box")
-                binary = original_image.replace("no_background", "binary")
-
+                color_box = original_image.replace("no_background/", f"color_box/{color}_")
                 # remove their files
-                os.remove(original_image)
                 os.remove(color_box)
-                os.remove(binary)
+
 
     @staticmethod
     def replace_image_with_boxes(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
         for img in soup.find_all('img'):
-            img['src'] = img['src'].replace("no_background", "color_box")
+            if 'data-color' in img:
+                color = img['data-color']
+                img['src'] = img['src'].replace("no_background/", f"color_box/{color}_")
+            else:
+                prefix = uuid.uuid4()
+                with open(f"debug/{prefix}_debug.html", "w") as text_file:
+                    text_file.write(html)
+
         return soup.prettify()
 
     @staticmethod
     def replace_image_with_binaries(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
         for img in soup.find_all('img'):
-            img['src'] = img['src'].replace("no_background", "binary")
+            img['src'] = img['src'].replace("no_background", f"binary")
         return soup.prettify()
 
     @staticmethod
     def normalize_with_beautifulsoup(html):
         soup = BeautifulSoup(html, "html.parser")
         return soup.prettify()
+
+    def get_three_hw_img_in_row(self):
+        matching_row = False
+        while not matching_row:
+            index = random.randint(0, len(self.paths_all_handwriting))
+            if index + 3 < len(self.paths_all_handwriting):
+                elements = self.paths_all_handwriting[index: index + 3]
+                if not int(elements[0]['name'].split("-")[-1]) + 1 == int(elements[1]['name'].split("-")[-1]):
+                    continue
+                if not int(elements[1]['name'].split("-")[-1]) + 1 == int(elements[2]['name'].split("-")[-1]):
+                    continue
+
+                matching_row = True
+                next_images = {'path': [], 'text': [], 'name': []}
+                for element in elements:
+                    next_images['path'].append(f"{self.handwriting_root_path}/no_background/{element['name']}.png")
+                    next_images['name'].append(element['name'])
+                    next_images['text'].append(element['text'])
+                    next_images['writing_type'] = str(WritingType.HANDWRITING)
+        return next_images
 
 
     def get_next_image(self) -> Dict:
@@ -126,58 +151,33 @@ class ImageProcessor:
 
             next_image['color'] = self.color_generator.get_color(self.counter_signatures)
             # make_white_area_transplant returns path for temporary file, with transparent background
-            next_image['path'], next_image['shape'] = store_images_for_masks(next_image['path'], next_image['name'],
+            next_image['shape'] = produce_color_boxes(next_image['path'], next_image['name'],
                                                                              box_color=next_image['color'])
-            next_image['transform'] = get_rand_transform()
+            next_image['transform'] = self.get_rand_transform()
+            next_image['color_string'] = str(next_image['color'])
 
 
         else:
-            content_counter = 0
-            while content_counter < 3:
-                chosen_handwriting_file = random.choice(self.paths_all_handwriting)
-                next_image = {'path': str(chosen_handwriting_file), 'name': chosen_handwriting_file.name,
-                              'writing_type': str(WritingType.HANDWRITING)}
+            next_image = self.get_three_hw_img_in_row()
 
-                # determine name of xml file (for a01-000u-00-01 it is a01-000u, therefore split and join)
-                xml_name = '-'.join(next_image['name'].split('-')[0:2])
-
-                # open xml file and extract data
-                with open(str(next(handwriting_root_path.rglob(xml_name + ".xml"))), 'r') as f:
-                    data = f.read()
-
-                # find the word in xml file, and its text
-                soup = BeautifulSoup(data, "xml")
-                current_object = soup.find(id=next_image['name'][:-4])
-                next_image['path'] = []
-                next_image['text'] = []
-                next_image['name'] = []
-
-                content_counter = 0
-
-                while content_counter < 3:
-                    if self.is_valid_handwriting(current_object['text']):
-                        next_image['text'].append(current_object['text'])
-                        next_image['path'].append(
-                            str(list(handwriting_root_path.rglob(f"*{current_object['id']}*"))[0]))
-                        next_image['name'].append(current_object['id'])
-                        content_counter += 1
-                    current_object = current_object.find_next('word')
-                    if current_object.__eq__(None):
-                        break
             new_paths = []
             new_colors = []
+            new_colors_string =[]
             new_shapes = []
+
             for (path, name) in zip(next_image['path'], next_image['name']):
                 color = self.color_generator.get_color(self.counter_handwriting)
                 self.counter_handwriting += 1
-                current_path, current_shape = store_images_for_masks(path, name + ".png", color)
-                new_paths.append(current_path)
+                current_shape = produce_color_boxes(path, name + ".png", color)
+                new_paths.append(path)
                 new_colors.append(color)
+                new_colors_string.append(str(color))
                 new_shapes.append(current_shape)
             next_image['path'] = new_paths
             next_image['color'] = new_colors
-            next_image['transform'] = get_rand_transform(scale=False)
+            next_image['transform'] = self.get_rand_transform(scale=False)
             next_image['shape'] = new_shapes
+            next_image['color_string'] = new_colors_string
 
         if next_image['writing_type'].__eq__(str(WritingType.SIGNATURE)):
             self.images['signatures'].append(next_image)
@@ -185,17 +185,19 @@ class ImageProcessor:
             self.images['handwritten'].append(next_image)
         return next_image
 
-    def is_valid_handwriting(self, text: str) -> bool:
-        return len(text) > 1 and re.search('[a-zA-Z]', text)
 
 
-def get_rand_transform(scale: bool = True, rotation_max_degree: int = 30,
-                       max_translationX_percentage: int = 20, max_translationY_percentage: int = 15) -> Dict:
-    rotation = get_rand_rotation(rotation_max_degree)
-    scale = get_rand_scale() if scale else 1
-    result = {"rotation": rotation, "scale": scale,
-              "translate": get_rand_translate(max_translationX_percentage, max_translationY_percentage)}
-    return result
+    def get_rand_transform(self, scale: bool = True, rotation_max_degree: int = 30,
+                           max_translationX_percentage: int = 20, max_translationY_percentage: int = 15) -> Dict:
+
+        if self.has_offsets:
+            rotation = get_rand_rotation(rotation_max_degree)
+            scale = get_rand_scale() if scale else 1
+            result = {"rotation": rotation, "scale": scale,
+                      "translate": get_rand_translate(max_translationX_percentage, max_translationY_percentage)}
+        else:
+            result = {"rotation": 0, "scale": 1,"translate": f"0%, 0%"}
+        return result
 
 
 def get_rand_translate(max_translationX_percentage: int, max_translationY_percentage: int) -> str:
@@ -216,91 +218,22 @@ def get_rand_scale() -> float:
     return 1 + abs(random.uniform(-0.5, 0.5))
 
 
-def calc_transparency(background_grey: int, darkest_grey: int, grey_value: int) -> int:
-    """
-    Calculates transparency value for a given grey_value
-    """
-
-    linear_transparency = 255 - (grey_value - darkest_grey)
-
-    # grey_value is 0 if pixel is black
-    # alpha_chanel is 0 if fully transparent
-
-    # pixel is almost white => set to transparent
-    if grey_value > background_grey - 40:
-        non_differentiable = 0
-
-    else:
-        non_differentiable = linear_transparency
-
-    return non_differentiable
-
-
-def store_images_for_masks(path: str, name: str, box_color: List[int]) -> str:
-    """
-     preprocessing of image: saves binary and semitransparent images in temp_images_path
-     semi-transparent image: everything transparent except handwriting/signature
-    :return: returns new path of semi-transparent image
-    """
+def produce_color_boxes(path: str, name: str, box_color: List[int]):
     with Image.open(path) as im:
         im = im.convert("RGBA")
-        data_rgba = im.getdata()
-
-        # grey_scale is used to determine how transparent a pixel should be
-        image_grey = im.convert("L")
-        data_grey = image_grey.getdata()
-
-        transparent_data = []
-        binary_data = []
-
-
-        data_white = [item for item in data_grey if item > 125]
-
-        set_data_grey = Counter(data_white)
-        try:
-            background_grey = set_data_grey.most_common(1)[0][0]
-        except IndexError:
-            print("IndexError: list index out of range with the image ", path)
-
-        index_darkest_grey = np.argmin(data_grey)
-
-        for item in zip(data_rgba, data_grey):
-            transparency = calc_transparency(background_grey, data_grey[index_darkest_grey], item[1])
-            transparent_data.append((data_rgba[index_darkest_grey][0], data_rgba[index_darkest_grey][0],
-                                     data_rgba[index_darkest_grey][0], transparency))
-            if transparency == 0:
-                binary_data.append((0, 0, 0, 0))
-            else:
-
-                binary_data.append((255, 255, 255, 255))
-
-        im.putdata(transparent_data)
-
-        # save image without background
-        output_path = temp_images_path / ("no_background_" + str(box_color) + "_" + name)
-        bbox = im.getbbox()
-        new_image = im.crop(bbox)
-        new_image.save(output_path, "png")
-
-        # save image as binary
-        im.putdata(binary_data)
-        new_image = im.crop(bbox)
-        output_path_binary = temp_images_path / ("binary_" + str(box_color) + "_" + name)
-        new_image.save(output_path_binary, "png")
 
         # is used to get bounding boxes
-        size = new_image.size
+        size = im.size
 
         image_color_box = square_images(im, box_color, int(1 / 2 * min(size[0], size[1])))
 
+
+        pathlib_path = pathlib.Path(path)
         # save image as with color_box
-        image_color_box = image_color_box.crop(bbox)
-        output_path_box = temp_images_path / ("color_box_" + str(box_color) + "_" + name)
+        output_path_box = pathlib_path.parent.parent / ("color_box/" + str(box_color) + "_" + name)
+
         image_color_box.save(output_path_box, "png")
-
-    return str(output_path), new_image.size
-
-
+    return size
 
 
 def square_images(im: Image, color: List[int], square_size: int = 80) -> Image:

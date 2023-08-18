@@ -284,8 +284,6 @@ def get_line_annotations(line_mask, vertical: bool):
     gray_mask = cv2.cvtColor(line_mask, cv2.COLOR_BGR2GRAY)
     contours, hierarchy = cv2.findContours(gray_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
-    table_mask = np.zeros((line_mask.shape[0], line_mask.shape[1], 3)).astype(np.uint8)
-
     lines = []
 
     for cnt in contours:
@@ -302,11 +300,7 @@ def get_line_annotations(line_mask, vertical: bool):
             line_data = {'xStart': int(x), 'yStart': int(y), 'xEnd': int(x + w), 'yEnd': int(y)}
 
         lines.append(line_data)
-        # draw rectangle to the numpy array, each rectangle with a different color
-        # note that the "colors" are gray scale the background is black = 0 and the colors start with 1 and increasing
-        # this means you can't really distinguish them
-        cv2.line(line_mask, (line_data['xStart'], line_data['yStart']), (line_data['xEnd'], line_data['yEnd']),
-                 (255, 0, 0), 1)
+        #cv2.line(line_mask, (line_data['xStart'], line_data['yStart']), (line_data['xEnd'], line_data['yEnd']), (255, 0, 0), 1)
 
     return lines
 

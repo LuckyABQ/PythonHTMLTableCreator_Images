@@ -28,8 +28,8 @@ PRINT_BOXES = 'print_boxes'
 
 class TableCreator:
 
-    def __init__(self, html_template='templates/index.html', size=(1500, 2200), min_max_div=(1000, 1200),
-                 table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(1, 2), table_font_size=(16, 25),
+    def __init__(self, html_template='templates/index.html', size=(2200, 1500), min_max_div=(1000, 1200),
+                 table_line_color_paras=(0, 50, 0.7, 1.0), table_line_width=(3, 4), table_font_size=(16, 25),
                  text_color_paras=(0, 50, 0.7, 1.0), table_min_max_columns=(4, 7), table_text_length=(10, 20),
                  table_min_max_rows=(4, 9), table_min_max_lines_in_row=(1, 2), div_font_size=(20, 30),
                  text_min_max_length=(200, 1000), div_top_margin=(20, 100),
@@ -38,7 +38,8 @@ class TableCreator:
                  border_radius_min_max=(0, 10), line_types=['solid', 'none'],
                  collapse_types=['collapse'], table_text_alignment=['center', 'left', 'right'],
                  text_alignment=['center', 'left', 'right'], table_float_alignment=['left', 'right'],
-                 float_alignment=['left', 'right'], contains_handwriting: bool = True, border_distribution = (0.5, 0.5)):
+                 float_alignment=['left', 'right'], contains_handwriting: bool = True, has_offsets: bool=False,
+                 border_distribution=(1, 0)):
 
         self.html_template = html_template
         self.size = size
@@ -68,6 +69,7 @@ class TableCreator:
         self.head_line_text_alignment = head_line_text_alignment
         self.contains_handwriting = contains_handwriting
         self.border_distribution = border_distribution
+        self.has_offsets = has_offsets
 
     def load_template(self, image_processor: ImageProcessor):
         """generate image based on your template and parameters.
@@ -78,6 +80,8 @@ class TableCreator:
         table_lines = everything is black (0,0,0) but the table lines are white (255,255,255)
         cell = everything is black (0,0,0) but the table cells are white (255,255,255)
         """
+
+        image_processor.has_offsets = self.has_offsets
 
         with open(self.html_template, 'r') as file:
             html = file.read().replace('\n', '')
@@ -133,12 +137,12 @@ class TableCreator:
             table_style = "table, tr, th, td {color: transparent !important; " \
                           "border-left-color: white !important;" \
                           "border-right-color: white !important;" \
-                          "border-top-color: black !important;" \
-                          "border-bottom-color: black !important;}"
+                          "border-top-color: rgba(0, 0, 0, 0) !important;" \
+                          "border-bottom-color: rgba(0, 0, 0, 0) !important;}"
         else:
             table_style = "table, tr, th, td {color: transparent !important; " \
-                          "border-left-color: black !important;" \
-                          "border-right-color: black !important;" \
+                          "border-left-color: rgba(0, 0, 0, 0) !important;" \
+                          "border-right-color: rgba(0, 0, 0, 0) !important;" \
                           "border-top-color: white !important;" \
                           "border-bottom-color: white !important;}"
         img_style = "img{opacity: 0.0}"
@@ -247,7 +251,7 @@ class TableCreator:
         with open("temp_html/temp_html_mask_table.html", "w") as text_file:
             text_file.write(html_table)
 
-        options = {'enable-local-file-access': ""}
+
         image_file_name_pairs = [[html, 'regular'], [html_table, 'table'],
                                  [html_table_lines_vertical, 'table_lines_vertical'],
                                  [html_table_lines_horizontal, 'table_lines_horizontal'],
@@ -278,7 +282,7 @@ class TableCreator:
         print_img = cv2.imread(f'temp_html/{prefix}_print.png')
         print_boxes_img = cv2.imread(f'temp_html/{prefix}_print_boxes.png')
 
-        #self.clean_up(prefix)
+        self.clean_up(prefix)
 
         return {REGULAR: regular_img, TABLE: table_img, TABLE_LINES_VERTICAL: table_lines_vertical_img,
                 TABLE_LINES_HORIZONTAL: table_lines_horizontal_img,
@@ -292,7 +296,8 @@ class TableCreator:
 
         os.remove(f'temp_html/{prefix}_regular.png')
         os.remove(f'temp_html/{prefix}_table.png')
-        os.remove(f'temp_html/{prefix}_table_lines.png')
+        os.remove(f'temp_html/{prefix}_table_lines_vertical.png')
+        os.remove(f'temp_html/{prefix}_table_lines_horizontal.png')
         os.remove(f'temp_html/{prefix}_cell.png')
         os.remove(f'temp_html/{prefix}_print_boxes.png')
         os.remove(f'temp_html/{prefix}_print.png')
@@ -476,13 +481,15 @@ class TableCreator:
                   f'width: fit-content; height: fit-content; position: relative; z-index: -1;" > '
 
         if next_image["writing_type"] == "HANDWRITING":
-            for i, (path, text, shape) in enumerate(zip(next_image['path'], next_image['text'], next_image['shape'])):
+            for i, (path, text, shape, color) in enumerate(zip(next_image['path'], next_image['text'], next_image['shape'], next_image["color_string"])):
                 new_height = max_height if max_height else 25
                 next_image['shape'][i] = (
                     (next_image['shape'][i][0] / next_image['shape'][i][1]) * new_height, new_height)
+
                 result += f'<img height={new_height} width="auto" src="{path}" ' \
                           f'class="{str(next_image["writing_type"])}" ' \
-                          f'alt="{text}"> '
+                          f'alt="{text}"' \
+                          f'data-color= "{color}"> '
         else:
             new_height = max_height if max_height else 60
             next_image['shape'] = ((next_image['shape'][0] / next_image['shape'][1]) * new_height, new_height)
@@ -492,7 +499,8 @@ class TableCreator:
             result += f'<img height={next_image["shape"][1]} width={next_image["shape"][0]} ' \
                       f'src="{next_image["path"]}" ' \
                       f'class="{str(next_image["writing_type"])}" ' \
-                      f'alt="{next_image["name"]}">'
+                      f'alt="{next_image["name"]}"' \
+                      f'data-color= "{next_image["color_string"]}">'
         result += f' </div>'
 
         return result
